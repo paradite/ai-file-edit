@@ -14,6 +14,7 @@ class MCPClient {
   private anthropic: Anthropic;
   private transport: StdioClientTransport | null = null;
   private tools: Tool[] = [];
+  private allowedDirectories: string[] = [];
 
   constructor() {
     this.anthropic = new Anthropic({
@@ -22,7 +23,8 @@ class MCPClient {
     this.mcp = new Client({name: 'mcp-client-cli', version: '1.0.0'});
   }
 
-  async connectToServer(serverScriptPath: string) {
+  async connectToServer(serverScriptPath: string, allowedDirectories: string[] = []) {
+    this.allowedDirectories = allowedDirectories;
     try {
       const isJs = serverScriptPath.endsWith('.js');
       const isPy = serverScriptPath.endsWith('.py');
@@ -37,7 +39,7 @@ class MCPClient {
 
       this.transport = new StdioClientTransport({
         command,
-        args: [serverScriptPath],
+        args: [serverScriptPath, ...this.allowedDirectories],
       });
       this.mcp.connect(this.transport);
 
@@ -60,7 +62,16 @@ class MCPClient {
   }
 
   async processQuery(query: string) {
+    // const messageContent = `You are a helpful assistant that can read and edit files.
+    // You can only read and edit files in the following directories: ${this.allowedDirectories.join(
+    //   ', ',
+    // )}.
+    // `;
     const messages: MessageParam[] = [
+      // {
+      //   role: 'user',
+      //   content: messageContent,
+      // },
       {
         role: 'user',
         content: query,
@@ -84,12 +95,13 @@ class MCPClient {
         const toolName = content.name;
         const toolArgs = content.input as {[x: string]: unknown} | undefined;
 
+        finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
         const result = await this.mcp.callTool({
           name: toolName,
           arguments: toolArgs,
         });
         toolResults.push(result);
-        finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
+        finalText.push(`[Tool ${toolName} returned: ${JSON.stringify(result)}]`);
 
         messages.push({
           role: 'user',
@@ -139,12 +151,13 @@ class MCPClient {
 
 async function main() {
   if (process.argv.length < 3) {
-    console.log('Usage: node index.ts <path_to_server_script>');
+    console.log('Usage: node index.ts <path_to_server_script> [args]');
     return;
   }
   const mcpClient = new MCPClient();
   try {
-    await mcpClient.connectToServer(process.argv[2]);
+    const allowedDirectories = process.argv.slice(3);
+    await mcpClient.connectToServer(process.argv[2], allowedDirectories);
     await mcpClient.chatLoop();
   } finally {
     await mcpClient.cleanup();
