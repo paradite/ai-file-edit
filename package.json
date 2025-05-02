@@ -1,0 +1,28 @@
+{
+  "name": "mcp-file-edit",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc && chmod 755 build/index.js"
+  },
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/paradite/mcp-file-edit.git"
+  },
+  "author": "paradite",
+  "bugs": {
+    "url": "https://github.com/paradite/mcp-file-edit/issues"
+  },
+  "homepage": "https://github.com/paradite/mcp-file-edit#readme",
+  "description": "",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.1",
+    "@modelcontextprotocol/sdk": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  }
+}
