@@ -15,6 +15,19 @@ import {zodToJsonSchema} from 'zod-to-json-schema';
 import {diffLines, createTwoFilesPatch} from 'diff';
 import {minimatch} from 'minimatch';
 
+enum ToolName {
+  ReadFile = 'read_file',
+  ReadMultipleFiles = 'read_multiple_files',
+  WriteFile = 'write_file',
+  EditFile = 'edit_file',
+  CreateDirectory = 'create_directory',
+  ListDirectory = 'list_directory',
+  DirectoryTree = 'directory_tree',
+  MoveFile = 'move_file',
+  SearchFiles = 'search_files',
+  GetFileInfo = 'get_file_info',
+}
+
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -343,7 +356,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: 'read_file',
+        name: ToolName.ReadFile,
         description:
           'Read the complete contents of a file from the file system. ' +
           'Handles various text encodings and provides detailed error messages ' +
@@ -352,7 +365,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ReadFileArgsSchema) as ToolInput,
       },
       {
-        name: 'read_multiple_files',
+        name: ToolName.ReadMultipleFiles,
         description:
           'Read the contents of multiple files simultaneously. This is more ' +
           'efficient than reading files one by one when you need to analyze ' +
@@ -362,7 +375,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ReadMultipleFilesArgsSchema) as ToolInput,
       },
       {
-        name: 'write_file',
+        name: ToolName.WriteFile,
         description:
           'Create a new file or completely overwrite an existing file with new content. ' +
           'Use with caution as it will overwrite existing files without warning. ' +
@@ -370,7 +383,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(WriteFileArgsSchema) as ToolInput,
       },
       {
-        name: 'edit_file',
+        name: ToolName.EditFile,
         description:
           'Make line-based edits to a text file. Each edit replaces exact line sequences ' +
           'with new content. Returns a git-style diff showing the changes made. ' +
@@ -378,7 +391,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput,
       },
       {
-        name: 'create_directory',
+        name: ToolName.CreateDirectory,
         description:
           'Create a new directory or ensure a directory exists. Can create multiple ' +
           'nested directories in one operation. If the directory already exists, ' +
@@ -387,7 +400,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(CreateDirectoryArgsSchema) as ToolInput,
       },
       {
-        name: 'list_directory',
+        name: ToolName.ListDirectory,
         description:
           'Get a detailed listing of all files and directories in a specified path. ' +
           'Results clearly distinguish between files and directories with [FILE] and [DIR] ' +
@@ -396,7 +409,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ListDirectoryArgsSchema) as ToolInput,
       },
       {
-        name: 'directory_tree',
+        name: ToolName.DirectoryTree,
         description:
           'Get a recursive tree view of files and directories as a JSON structure. ' +
           "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
@@ -405,7 +418,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
       },
       {
-        name: 'move_file',
+        name: ToolName.MoveFile,
         description:
           'Move or rename files and directories. Can move files between directories ' +
           'and rename them in a single operation. If the destination exists, the ' +
@@ -414,7 +427,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(MoveFileArgsSchema) as ToolInput,
       },
       {
-        name: 'search_files',
+        name: ToolName.SearchFiles,
         description:
           'Recursively search for files and directories matching a pattern. ' +
           'Searches through all subdirectories from the starting path. The search ' +
@@ -424,7 +437,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
       },
       {
-        name: 'get_file_info',
+        name: ToolName.GetFileInfo,
         description:
           'Retrieve detailed metadata about a file or directory. Returns comprehensive ' +
           'information including size, creation time, last modified time, permissions, ' +
@@ -440,8 +453,8 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
   try {
     const {name, arguments: args} = request.params;
 
-    switch (name) {
-      case 'read_file': {
+    switch (name as ToolName) {
+      case ToolName.ReadFile: {
         const parsed = ReadFileArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
@@ -453,7 +466,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         };
       }
 
-      case 'read_multiple_files': {
+      case ToolName.ReadMultipleFiles: {
         const parsed = ReadMultipleFilesArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for read_multiple_files: ${parsed.error}`);
@@ -475,7 +488,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         };
       }
 
-      case 'write_file': {
+      case ToolName.WriteFile: {
         const parsed = WriteFileArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
@@ -487,7 +500,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         };
       }
 
-      case 'edit_file': {
+      case ToolName.EditFile: {
         const parsed = EditFileArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for edit_file: ${parsed.error}`);
@@ -499,7 +512,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         };
       }
 
-      case 'create_directory': {
+      case ToolName.CreateDirectory: {
         const parsed = CreateDirectoryArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for create_directory: ${parsed.error}`);
@@ -511,7 +524,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         };
       }
 
-      case 'list_directory': {
+      case ToolName.ListDirectory: {
         const parsed = ListDirectoryArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for list_directory: ${parsed.error}`);
@@ -526,7 +539,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         };
       }
 
-      case 'directory_tree': {
+      case ToolName.DirectoryTree: {
         const parsed = DirectoryTreeArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
@@ -571,7 +584,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         };
       }
 
-      case 'move_file': {
+      case ToolName.MoveFile: {
         const parsed = MoveFileArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for move_file: ${parsed.error}`);
@@ -589,7 +602,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         };
       }
 
-      case 'search_files': {
+      case ToolName.SearchFiles: {
         const parsed = SearchFilesArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
@@ -607,7 +620,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         };
       }
 
-      case 'get_file_info': {
+      case ToolName.GetFileInfo: {
         const parsed = GetFileInfoArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for get_file_info: ${parsed.error}`);
