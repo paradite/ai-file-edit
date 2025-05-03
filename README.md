@@ -1,5 +1,7 @@
 # AI File Edit
 
+[![npm](https://img.shields.io/npm/v/ai-file-edit)](https://www.npmjs.com/package/ai-file-edit)
+
 A library for editing files using AI models (Claude and GPT). This library allows you to make file edits using natural language instructions.
 
 ## Features
