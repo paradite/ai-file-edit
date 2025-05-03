@@ -187,7 +187,7 @@ export class FileEditTool {
     // Update the messages with latest file contents
     const queryWithFileContents = Object.entries(this.fileContents)
       .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
-      .join('\n');
+      .join('\n\n');
 
     const followup = {
       role: 'user',
@@ -305,7 +305,7 @@ export class FileEditTool {
     // Update the messages with latest file contents
     const queryWithFileContents = Object.entries(this.fileContents)
       .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
-      .join('\n');
+      .join('\n\n');
 
     const followup = {
       role: 'user',
@@ -392,7 +392,7 @@ export class FileEditTool {
     // prepend the file contents to the query
     const queryWithFileContents = Object.entries(this.fileContents)
       .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
-      .join('\n');
+      .join('\n\n');
 
     const messageContent = queryWithFileContents + '\n\n' + query;
 

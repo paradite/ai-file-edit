@@ -8,6 +8,8 @@
     "test:file": "npm run build:all && jest",
     "test:openai": "npm run build:all && jest mcp-file-edit-openai.test.ts",
     "test:claude": "npm run build:all && jest mcp-file-edit-claude.test.ts",
+    "test:claude-multiple": "npm run build:all && jest mcp-file-edit-claude-multiple.test.ts",
+    "test:openai-multiple": "npm run build:all && jest mcp-file-edit-openai-multiple.test.ts",
     "build": "tsc && chmod 755 build/main.js",
     "build:server": "cd servers/filesystem && npm run build",
     "build:all": "npm run build && npm run build:server"
