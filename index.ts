@@ -117,12 +117,10 @@ export class FileEditTool {
     }
   }
 
-  private async handleAnthropicToolUse(
-    modelName: ModelEnum,
+  private async handleToolUse(
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
-    round: number = 0,
   ): Promise<{finalText: string[]; toolResults: string[]; finalStatus: ToolCallStatus}> {
     const finalText = [];
     const toolResults = [];
@@ -195,6 +193,28 @@ export class FileEditTool {
     messages.push(followup);
 
     finalText.push(`[Follow up: ${followup.content}]`);
+
+    return {finalText, toolResults, finalStatus};
+  }
+
+  private async handleAnthropicToolUse(
+    modelName: ModelEnum,
+    toolName: string,
+    toolArgs: {[x: string]: unknown} | undefined,
+    messages: MessageParam[],
+    round: number = 0,
+  ): Promise<{finalText: string[]; toolResults: string[]; finalStatus: ToolCallStatus}> {
+    const {
+      finalText,
+      toolResults,
+      finalStatus: initialStatus,
+    } = await this.handleToolUse(toolName, toolArgs, messages);
+
+    if (initialStatus !== 'success') {
+      return {finalText, toolResults, finalStatus: initialStatus};
+    }
+
+    let finalStatus: ToolCallStatus = initialStatus;
 
     const response = await this.anthropic.messages.create({
       model: modelName,
@@ -244,77 +264,17 @@ export class FileEditTool {
     messages: MessageParam[],
     round: number = 0,
   ): Promise<{finalText: string[]; toolResults: string[]; finalStatus: ToolCallStatus}> {
-    const finalText = [];
-    const toolResults = [];
-    let finalStatus: ToolCallStatus = 'success';
+    const {
+      finalText,
+      toolResults,
+      finalStatus: initialStatus,
+    } = await this.handleToolUse(toolName, toolArgs, messages);
 
-    finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
-
-    let result: string;
-    if (toolName === 'edit_file') {
-      const parsed = EditFileArgsSchema.safeParse(toolArgs);
-      if (!parsed.success) {
-        return {
-          finalText: [`[Invalid arguments for edit_file: ${parsed.error}]`],
-          toolResults: [],
-          finalStatus: 'failure',
-        };
-      }
-      if (parsed.data.content === undefined && parsed.data.edits === undefined) {
-        return {
-          finalText: [`[Either content or edits must be provided]`],
-          toolResults: [],
-          finalStatus: 'failure',
-        };
-      }
-      if (parsed.data.content !== undefined && parsed.data.edits !== undefined) {
-        return {
-          finalText: [
-            `[Cannot provide both content and edits - use content for complete file writes and edits for partial changes]`,
-          ],
-          toolResults: [],
-          finalStatus: 'failure',
-        };
-      }
-      try {
-        const validPath = await validatePath(parsed.data.path, this.allowedDirectories);
-        result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.content);
-      } catch (error) {
-        return {
-          finalText: [`[Error applying edits: ${error}]`],
-          toolResults: [],
-          finalStatus: 'failure',
-        };
-      }
-    } else {
-      return {
-        finalText: [`[Unknown tool: ${toolName}]`],
-        toolResults: [],
-        finalStatus: 'failure',
-      };
+    if (initialStatus !== 'success') {
+      return {finalText, toolResults, finalStatus: initialStatus};
     }
 
-    toolResults.push(result);
-    finalText.push(`[Tool ${toolName} returned: ${result}]`);
-
-    // Update file contents after tool call
-    await this.updateFileContents();
-
-    // Update the messages with latest file contents
-    const queryWithFileContents = Object.entries(this.fileContents)
-      .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
-      .join('\n\n');
-
-    const followup = {
-      role: 'user',
-      content: `[Files have been updated after the tool call]\n\n${queryWithFileContents}\n\n${followupTemplate(
-        result,
-      )}`,
-    } as MessageParam;
-
-    messages.push(followup);
-
-    finalText.push(`[Follow up: ${followup.content}]`);
+    let finalStatus: ToolCallStatus = initialStatus;
 
     const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
