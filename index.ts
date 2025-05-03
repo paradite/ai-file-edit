@@ -13,6 +13,8 @@ import {validatePath, applyFileEdits} from './utils/fileUtils.js';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+const MAX_TOOL_USE_ROUNDS = 3;
+
 // Use model enums from llm-info package
 const ANTHROPIC_MODEL = ModelEnum['claude-3-5-sonnet-20241022'];
 const OPENAI_MODEL = ModelEnum['gpt-4o'];
@@ -47,23 +49,17 @@ const EditFileArgsSchema = z.object({
     .optional()
     .describe('Complete file content to write (for new files or complete overwrites)'),
   edits: z.array(EditOperation).optional().describe('List of edits to apply (for partial edits)'),
-  dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format'),
 });
 
-const ToolInputSchema = z.object({
-  name: z.string(),
-  description: z.string(),
-  inputSchema: z.any(),
-});
-
-export class MCPClient {
+export class FileEditTool {
   private anthropic: Anthropic;
   private openai: OpenAI;
   private allowedDirectories: string[] = [];
   private fileContents: Record<string, string> = {};
   private tools: Tool[] = [];
 
-  constructor() {
+  constructor(allowedDirectories: string[] = []) {
+    this.allowedDirectories = allowedDirectories;
     this.anthropic = new Anthropic({
       apiKey: ANTHROPIC_API_KEY,
     });
@@ -92,13 +88,14 @@ export class MCPClient {
         },
       },
     ];
+
+    // Initialize file contents
+    this.initializeFileContents();
   }
 
-  async connectToServer(allowedDirectories: string[] = []) {
-    this.allowedDirectories = allowedDirectories;
-
+  private async initializeFileContents() {
     // read all files in allowedDirectories
-    for (const dir of allowedDirectories) {
+    for (const dir of this.allowedDirectories) {
       const files = await fs.readdir(dir);
       for (const file of files) {
         const filePath = path.join(dir, file);
@@ -107,7 +104,7 @@ export class MCPClient {
     }
 
     console.log(
-      'Connected with tools:',
+      'Initialized with tools:',
       this.tools.map(({name}) => name),
     );
   }
@@ -116,7 +113,7 @@ export class MCPClient {
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
-    round: number = 1,
+    round: number = 0,
   ): Promise<{finalText: string[]; toolResults: string[]}> {
     const finalText = [];
     const toolResults = [];
@@ -148,12 +145,7 @@ export class MCPClient {
       }
       try {
         const validPath = await validatePath(parsed.data.path, this.allowedDirectories);
-        result = await applyFileEdits(
-          validPath,
-          parsed.data.edits,
-          parsed.data.content,
-          parsed.data.dryRun,
-        );
+        result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.content);
       } catch (error) {
         return {
           finalText: [`[Error applying edits: ${error}]`],
@@ -191,7 +183,7 @@ export class MCPClient {
       if (content.type === 'text') {
         finalText.push(content.text);
       } else if (content.type === 'tool_use') {
-        if (round < 2) {
+        if (round < MAX_TOOL_USE_ROUNDS) {
           // If we get a tool use response and we haven't reached the round limit
           const {finalText: nextRoundFinalText, toolResults: nextRoundToolResults} =
             await this.handleAnthropicToolUse(
@@ -204,7 +196,9 @@ export class MCPClient {
           toolResults.push(...nextRoundToolResults);
         } else {
           // If we get a tool use response but we've reached the round limit
-          finalText.push('[Maximum tool use rounds (2) reached. Stopping further tool calls.]');
+          finalText.push(
+            `[Maximum tool use rounds (${MAX_TOOL_USE_ROUNDS}) reached. Stopping further tool calls.]`,
+          );
         }
       }
     }
@@ -212,24 +206,11 @@ export class MCPClient {
     return {finalText, toolResults};
   }
 
-  private convertAnthropicMessageToOpenAI(msg: MessageParam): ChatCompletionMessageParam {
-    return {
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content:
-        typeof msg.content === 'string'
-          ? msg.content
-          : msg.content
-              .map(c => (c.type === 'text' ? c.text : ''))
-              .filter(Boolean)
-              .join('\n'),
-    };
-  }
-
   private async handleOpenAIToolUse(
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
-    round: number = 1,
+    round: number = 0,
   ): Promise<{finalText: string[]; toolResults: string[]}> {
     const finalText = [];
     const toolResults = [];
@@ -261,12 +242,7 @@ export class MCPClient {
       }
       try {
         const validPath = await validatePath(parsed.data.path, this.allowedDirectories);
-        result = await applyFileEdits(
-          validPath,
-          parsed.data.edits,
-          parsed.data.content,
-          parsed.data.dryRun,
-        );
+        result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.content);
       } catch (error) {
         return {
           finalText: [`[Error applying edits: ${error}]`],
@@ -315,7 +291,7 @@ export class MCPClient {
 
     if (message.tool_calls) {
       for (const toolCall of message.tool_calls) {
-        if (round < 2) {
+        if (round < MAX_TOOL_USE_ROUNDS) {
           // If we get a tool use response and we haven't reached the round limit
           const {finalText: nextRoundFinalText, toolResults: nextRoundToolResults} =
             await this.handleOpenAIToolUse(
@@ -328,7 +304,9 @@ export class MCPClient {
           toolResults.push(...nextRoundToolResults);
         } else {
           // If we get a tool use response but we've reached the round limit
-          finalText.push('[Maximum tool use rounds (2) reached. Stopping further tool calls.]');
+          finalText.push(
+            `[Maximum tool use rounds (${MAX_TOOL_USE_ROUNDS}) reached. Stopping further tool calls.]`,
+          );
         }
       }
     }
@@ -336,10 +314,23 @@ export class MCPClient {
     return {finalText, toolResults};
   }
 
+  private convertAnthropicMessageToOpenAI(msg: MessageParam): ChatCompletionMessageParam {
+    return {
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content:
+        typeof msg.content === 'string'
+          ? msg.content
+          : msg.content
+              .map(c => (c.type === 'text' ? c.text : ''))
+              .filter(Boolean)
+              .join('\n'),
+    };
+  }
+
   async processQuery(
     query: string,
     useOpenAI: boolean = false,
-  ): Promise<{finalText: string[]; toolResults: unknown[]}> {
+  ): Promise<{finalText: string[]; toolResults: string[]}> {
     // prepend the file contents to the query
     const queryWithFileContents = Object.entries(this.fileContents)
       .map(([file, content]) => `[File ${file}]:\n${content}`)
@@ -422,14 +413,14 @@ export class MCPClient {
     }
   }
 
-  async chatLoop(useOpenAI: boolean = false) {
+  async startInteractiveMode(useOpenAI: boolean = false) {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
     });
 
     try {
-      console.log('\nMCP Client Started!');
+      console.log('\nFile Edit Tool Started!');
       console.log(`Using ${useOpenAI ? 'OpenAI' : 'Anthropic'} for processing queries`);
       console.log("Type your queries or 'quit' to exit.");
 
@@ -445,9 +436,5 @@ export class MCPClient {
     } finally {
       rl.close();
     }
-  }
-
-  async cleanup() {
-    // No need to close any connections as the tools are now handled locally
   }
 }

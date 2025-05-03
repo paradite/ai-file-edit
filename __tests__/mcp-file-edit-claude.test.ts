@@ -1,9 +1,9 @@
-import {MCPClient} from '../index';
+import {FileEditTool} from '../index';
 import fs from 'fs/promises';
 import path from 'path';
 
-describe('MCP File Edit', () => {
-  let mcpClient: MCPClient;
+describe('File Edit Tool with Claude', () => {
+  let fileEditTool: FileEditTool;
   const testDir = path.join(process.cwd(), 'sample-claude');
 
   beforeAll(async () => {
@@ -18,11 +18,7 @@ describe('MCP File Edit', () => {
   });
 
   beforeEach(() => {
-    mcpClient = new MCPClient();
-  });
-
-  afterEach(async () => {
-    await mcpClient.cleanup();
+    fileEditTool = new FileEditTool([path.join(testDir, '1')]);
   });
 
   test('should allow editing files in allowed directory', async () => {
@@ -33,11 +29,8 @@ describe('MCP File Edit', () => {
       'function add(a, b) { return a + b; }\nconsole.log(add(1, 2));',
     );
 
-    // Connect to server with only test directory 1 allowed
-    await mcpClient.connectToServer([path.join(testDir, '1')]);
-
     // Test editing file in allowed directory
-    const response = await mcpClient.processQuery(
+    const response = await fileEditTool.processQuery(
       `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
     console.log('Tool results:', response.toolResults);
@@ -63,11 +56,8 @@ describe('MCP File Edit', () => {
       'function add(a, b) { return a + b; }\nconsole.log(add(1, 2));',
     );
 
-    // Connect to server with only test directory 1 allowed
-    await mcpClient.connectToServer([path.join(testDir, '1')]);
-
     // Test editing file in non-allowed directory
-    const response = await mcpClient.processQuery(
+    const response = await fileEditTool.processQuery(
       `update ${nonAllowedPath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
     console.log('Tool results:', response.toolResults);
@@ -80,14 +70,11 @@ describe('MCP File Edit', () => {
   });
 
   test('should create new file in allowed directory', async () => {
-    // Connect to server with test directory 1 allowed
-    await mcpClient.connectToServer([path.join(testDir, '1')]);
-
     // Define path for new file
     const newFilePath = path.join(testDir, '1', 'new-file.js');
 
     // Test creating a new file
-    const response = await mcpClient.processQuery(
+    const response = await fileEditTool.processQuery(
       `create new file ${newFilePath} with content: function greet(name) { return "Hello, " + name; }`,
     );
     console.log('Tool results:', response.toolResults);
@@ -97,7 +84,6 @@ describe('MCP File Edit', () => {
     // Verify the file was created with correct content
     const fileContent = await fs.readFile(newFilePath, 'utf-8');
     const fileWithoutNewlines = fileContent.replace(/\r\n/g, '').replace(/\n/g, '');
-    console.log('File content:', fileWithoutNewlines);
     expect(fileWithoutNewlines).toEqual(`function greet(name) { return "Hello, " + name; }`);
   });
 });

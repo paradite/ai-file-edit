@@ -1,4 +1,4 @@
-import {MCPClient} from './index.js';
+import {FileEditTool} from './index.js';
 
 async function main() {
   if (process.argv.length < 3) {
@@ -6,26 +6,24 @@ async function main() {
     return;
   }
 
-  const mcpClient = new MCPClient();
+  // Check if --openai flag is present
+  const openaiIndex = process.argv.indexOf('--openai');
+  const useOpenAI = openaiIndex !== -1;
+
+  // Remove --openai from args if present
+  const args = process.argv.slice(2).filter(arg => arg !== '--openai');
+
+  if (args.length < 1) {
+    console.log('Usage: node main.ts [--openai] [args]');
+    return;
+  }
+
+  const allowedDirectories = args.slice(1);
+  const fileEditTool = new FileEditTool(allowedDirectories);
+
   try {
-    // Check if --openai flag is present
-    const openaiIndex = process.argv.indexOf('--openai');
-    const useOpenAI = openaiIndex !== -1;
-
-    // Remove --openai from args if present
-    const args = process.argv.slice(2).filter(arg => arg !== '--openai');
-
-    if (args.length < 1) {
-      console.log('Usage: node main.ts [--openai] [args]');
-      return;
-    }
-
-    const allowedDirectories = args.slice(1);
-
-    await mcpClient.connectToServer(allowedDirectories);
-    await mcpClient.chatLoop(useOpenAI);
+    await fileEditTool.startInteractiveMode(useOpenAI);
   } finally {
-    await mcpClient.cleanup();
     process.exit(0);
   }
 }

@@ -1,9 +1,9 @@
-import {MCPClient} from '../index';
+import {FileEditTool} from '../index';
 import fs from 'fs/promises';
 import path from 'path';
 
-describe('MCP File Edit with OpenAI', () => {
-  let mcpClient: MCPClient;
+describe('File Edit Tool with OpenAI', () => {
+  let fileEditTool: FileEditTool;
   const testDir = path.join(process.cwd(), 'sample-openai');
 
   beforeAll(async () => {
@@ -18,11 +18,7 @@ describe('MCP File Edit with OpenAI', () => {
   });
 
   beforeEach(() => {
-    mcpClient = new MCPClient();
-  });
-
-  afterEach(async () => {
-    await mcpClient.cleanup();
+    fileEditTool = new FileEditTool([path.join(testDir, '1')]);
   });
 
   test('should allow editing files in allowed directory using OpenAI', async () => {
@@ -33,11 +29,8 @@ describe('MCP File Edit with OpenAI', () => {
       'function add(a, b) { return a + b; }\nconsole.log(add(1, 2));',
     );
 
-    // Connect to server with only test directory 1 allowed
-    await mcpClient.connectToServer([path.join(testDir, '1')]);
-
     // Test editing file in allowed directory using OpenAI
-    const response = await mcpClient.processQuery(
+    const response = await fileEditTool.processQuery(
       `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
       true,
     );
@@ -64,11 +57,8 @@ describe('MCP File Edit with OpenAI', () => {
       'function add(a, b) { return a + b; }\nconsole.log(add(1, 2));',
     );
 
-    // Connect to server with only test directory 1 allowed
-    await mcpClient.connectToServer([path.join(testDir, '1')]);
-
     // Test editing file in non-allowed directory using OpenAI
-    const response = await mcpClient.processQuery(
+    const response = await fileEditTool.processQuery(
       `update ${nonAllowedPath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
       true,
     );
@@ -82,14 +72,11 @@ describe('MCP File Edit with OpenAI', () => {
   });
 
   test('should create new file in allowed directory using OpenAI', async () => {
-    // Connect to server with test directory 1 allowed
-    await mcpClient.connectToServer([path.join(testDir, '1')]);
-
     // Define path for new file
     const newFilePath = path.join(testDir, '1', 'new-file-openai.js');
 
     // Test creating a new file using OpenAI
-    const response = await mcpClient.processQuery(
+    const response = await fileEditTool.processQuery(
       `create new file ${newFilePath} with content: function greet(name) { return "Hello, " + name; }`,
       true,
     );
@@ -100,7 +87,6 @@ describe('MCP File Edit with OpenAI', () => {
     // Verify the file was created with correct content
     const fileContent = await fs.readFile(newFilePath, 'utf-8');
     const fileWithoutNewlines = fileContent.replace(/\r\n/g, '').replace(/\n/g, '');
-    console.log('File content:', fileWithoutNewlines);
     expect(fileWithoutNewlines).toEqual(`function greet(name) { return "Hello, " + name; }`);
   });
 });

@@ -91,7 +91,6 @@ export async function applyFileEdits(
   filePath: string,
   edits: Array<{oldText: string; newText: string}> | undefined,
   content: string | undefined,
-  dryRun = false,
 ): Promise<string> {
   let originalContent = '';
   try {
@@ -170,9 +169,7 @@ export async function applyFileEdits(
   }
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 
-  if (!dryRun) {
-    await fs.writeFile(filePath, modifiedContent, 'utf-8');
-  }
+  await fs.writeFile(filePath, modifiedContent, 'utf-8');
 
   const response = `Successfully ${
     originalContent ? 'updated' : 'created'
