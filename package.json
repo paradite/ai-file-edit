@@ -1,20 +1,30 @@
 {
-  "name": "mcp-file-edit",
+  "name": "ai-file-edit",
   "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "npm run build:all && jest",
-    "test:watch": "npm run build:all && jest --watch",
-    "test:file": "npm run build:all && jest --verbose",
-    "test:openai": "npm run build:all && jest --verbose mcp-file-edit-openai.test.ts",
-    "test:claude": "npm run build:all && jest --verbose mcp-file-edit-claude.test.ts",
-    "test:claude-multiple": "npm run build:all && jest --verbose mcp-file-edit-claude-multiple.test.ts",
-    "test:openai-multiple": "npm run build:all && jest --verbose mcp-file-edit-openai-multiple.test.ts",
-    "build": "tsc && chmod 755 build/main.js",
-    "build:server": "cd servers/filesystem && npm run build",
-    "build:all": "npm run build && npm run build:server"
-  },
+  "main": "build/main.js",
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./build/main.js",
+      "types": "./build/main.d.ts"
+    }
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "test": "npm run build && jest",
+    "test:watch": "npm run build && jest --watch",
+    "test:file": "npm run build && jest --verbose",
+    "test:openai": "npm run build && jest --verbose mcp-file-edit-openai.test.ts",
+    "test:claude": "npm run build && jest --verbose mcp-file-edit-claude.test.ts",
+    "test:claude-multiple": "npm run build && jest --verbose mcp-file-edit-claude-multiple.test.ts",
+    "test:openai-multiple": "npm run build && jest --verbose mcp-file-edit-openai-multiple.test.ts",
+    "build": "tsc",
+    "prepublish": "npm run build",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test"
+  },
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/paradite/mcp-file-edit.git"

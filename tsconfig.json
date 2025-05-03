@@ -8,8 +8,9 @@
       "strict": true,
       "esModuleInterop": true,
       "skipLibCheck": true,
-      "forceConsistentCasingInFileNames": true
+      "forceConsistentCasingInFileNames": true,
+      "declaration": true
     },
-    "include": ["index.ts", "main.ts"],
+    "include": ["index.ts"],
     "exclude": ["node_modules"]
   }
