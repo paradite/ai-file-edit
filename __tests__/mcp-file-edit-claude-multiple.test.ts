@@ -1,6 +1,7 @@
 import {FileEditTool} from '../index';
 import fs from 'fs/promises';
 import path from 'path';
+import {ModelEnum} from 'llm-info';
 
 describe('File Edit Tool with Claude - Multiple Files', () => {
   let fileEditTool: FileEditTool;
@@ -37,6 +38,7 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
       `update both ${file1Path} and ${file2Path} to change the arithmetic operations to multiplication. 
        In ${file1Path}, change add to multiply and update the function calls.
        In ${file2Path}, change subtract to multiply and update the function calls.`,
+      ModelEnum['claude-3-5-sonnet-20241022'],
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));
@@ -84,6 +86,7 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
       `update both ${allowedPath} and ${nonAllowedPath} to change the arithmetic operations to multiplication. 
        In ${allowedPath}, change add to multiply and update the function calls.
        In ${nonAllowedPath}, change subtract to multiply and update the function calls.`,
+      ModelEnum['claude-3-5-sonnet-20241022'],
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));

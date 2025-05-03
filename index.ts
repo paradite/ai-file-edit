@@ -1,11 +1,10 @@
 import {Anthropic} from '@anthropic-ai/sdk';
 import {MessageParam, Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
-import readline from 'readline/promises';
 import fs from 'fs/promises';
 import path from 'path';
 import {OpenAI} from 'openai';
 import {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
-import {ModelEnum} from 'llm-info';
+import {ModelEnum, ModelInfoMap, AI_PROVIDERS} from 'llm-info';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import {validatePath, applyFileEdits} from './utils/fileUtils.js';
@@ -16,10 +15,6 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const MAX_TOOL_USE_ROUNDS = 3;
 
 type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
-
-// Use model enums from llm-info package
-const ANTHROPIC_MODEL = ModelEnum['claude-3-5-sonnet-20241022'];
-const OPENAI_MODEL = ModelEnum['gpt-4o'];
 
 if (!ANTHROPIC_API_KEY) {
   throw new Error('ANTHROPIC_API_KEY is not set');
@@ -123,6 +118,7 @@ export class FileEditTool {
   }
 
   private async handleAnthropicToolUse(
+    modelName: ModelEnum,
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
@@ -201,7 +197,7 @@ export class FileEditTool {
     finalText.push(`[Follow up: ${followup.content}]`);
 
     const response = await this.anthropic.messages.create({
-      model: ANTHROPIC_MODEL,
+      model: modelName,
       max_tokens: 1000,
       messages,
       tools: this.tools,
@@ -219,6 +215,7 @@ export class FileEditTool {
             toolResults: nextRoundToolResults,
             finalStatus: nextRoundFinalStatus,
           } = await this.handleAnthropicToolUse(
+            modelName,
             content.name,
             content.input as {[x: string]: unknown} | undefined,
             messages,
@@ -241,6 +238,7 @@ export class FileEditTool {
   }
 
   private async handleOpenAIToolUse(
+    modelName: ModelEnum,
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
@@ -321,7 +319,7 @@ export class FileEditTool {
     const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
     const response = await this.openai.chat.completions.create({
-      model: OPENAI_MODEL,
+      model: modelName,
       messages: openAIMessages,
       tools: this.tools.map(tool => ({
         type: 'function',
@@ -348,6 +346,7 @@ export class FileEditTool {
             toolResults: nextRoundToolResults,
             finalStatus: nextRoundFinalStatus,
           } = await this.handleOpenAIToolUse(
+            modelName,
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments),
             messages,
@@ -384,7 +383,7 @@ export class FileEditTool {
 
   async processQuery(
     query: string,
-    useOpenAI: boolean = false,
+    modelName: ModelEnum,
   ): Promise<{finalText: string[]; toolResults: string[]; finalStatus: ToolCallStatus}> {
     let toolCallCount = 0;
     let finalStatus: ToolCallStatus = 'success';
@@ -403,11 +402,14 @@ export class FileEditTool {
       },
     ];
 
-    if (useOpenAI) {
+    // Determine provider based on model name
+    const provider = ModelInfoMap[modelName].provider;
+
+    if (provider === AI_PROVIDERS.OPENAI) {
       const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
       const response = await this.openai.chat.completions.create({
-        model: OPENAI_MODEL,
+        model: modelName,
         messages: openAIMessages,
         tools: this.tools.map(tool => ({
           type: 'function',
@@ -434,6 +436,7 @@ export class FileEditTool {
             toolResults: newToolResults,
             finalStatus: toolFinalStatus,
           } = await this.handleOpenAIToolUse(
+            modelName,
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments),
             messages,
@@ -450,9 +453,9 @@ export class FileEditTool {
       }
 
       return {finalText, toolResults, finalStatus};
-    } else {
+    } else if (provider === AI_PROVIDERS.ANTHROPIC) {
       const response = await this.anthropic.messages.create({
-        model: ANTHROPIC_MODEL,
+        model: modelName,
         max_tokens: 1000,
         messages,
         tools: this.tools,
@@ -470,6 +473,7 @@ export class FileEditTool {
             toolResults: newToolResults,
             finalStatus: toolFinalStatus,
           } = await this.handleAnthropicToolUse(
+            modelName,
             content.name,
             content.input as {[x: string]: unknown} | undefined,
             messages,
@@ -486,32 +490,12 @@ export class FileEditTool {
       }
 
       return {finalText, toolResults, finalStatus};
-    }
-  }
-
-  async startInteractiveMode(useOpenAI: boolean = false) {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-
-    try {
-      console.log('\nFile Edit Tool Started!');
-      console.log(`Using ${useOpenAI ? 'OpenAI' : 'Anthropic'} for processing queries`);
-      console.log("Type your queries or 'quit' to exit.");
-
-      while (true) {
-        const message = await rl.question('\nQuery: ');
-        if (message.toLowerCase() === 'quit') {
-          break;
-        }
-        const response = await this.processQuery(message, useOpenAI);
-        console.log('\nResponse:\n' + response.finalText.join('\n'));
-        console.log('\nTool results:\n' + JSON.stringify(response.toolResults, null, 2));
-        console.log('\nFinal status:\n' + response.finalStatus);
-      }
-    } finally {
-      rl.close();
+    } else {
+      return {
+        finalText: [`[Unsupported model: ${modelName}]`],
+        toolResults: [],
+        finalStatus: 'failure',
+      };
     }
   }
 }
