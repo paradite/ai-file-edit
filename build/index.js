@@ -6,7 +6,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not set');
 }
-class MCPClient {
+export class MCPClient {
     mcp;
     anthropic;
     transport = null;
@@ -52,16 +52,7 @@ class MCPClient {
         }
     }
     async processQuery(query) {
-        // const messageContent = `You are a helpful assistant that can read and edit files.
-        // You can only read and edit files in the following directories: ${this.allowedDirectories.join(
-        //   ', ',
-        // )}.
-        // `;
         const messages = [
-            // {
-            //   role: 'user',
-            //   content: messageContent,
-            // },
             {
                 role: 'user',
                 content: query,
@@ -128,20 +119,3 @@ class MCPClient {
         await this.mcp.close();
     }
 }
-async function main() {
-    if (process.argv.length < 3) {
-        console.log('Usage: node index.ts <path_to_server_script> [args]');
-        return;
-    }
-    const mcpClient = new MCPClient();
-    try {
-        const allowedDirectories = process.argv.slice(3);
-        await mcpClient.connectToServer(process.argv[2], allowedDirectories);
-        await mcpClient.chatLoop();
-    }
-    finally {
-        await mcpClient.cleanup();
-        process.exit(0);
-    }
-}
-main();

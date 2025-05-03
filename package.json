@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc && chmod 755 build/index.js"
+    "test": "npm run build:all && jest",
+    "test:watch": "npm run build:all && jest --watch",
+    "build": "tsc && chmod 755 build/main.js",
+    "build:server": "cd servers/filesystem && npm run build",
+    "build:all": "npm run build && npm run build:server"
   },
   "type": "module",
   "repository": {
@@ -22,7 +25,10 @@
     "@modelcontextprotocol/sdk": "^1.11.0"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/node": "^22.15.3",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.2",
     "typescript": "^5.8.3"
   }
 }

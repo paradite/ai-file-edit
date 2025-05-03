@@ -13,19 +13,11 @@ import os from 'os';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import {diffLines, createTwoFilesPatch} from 'diff';
-import {minimatch} from 'minimatch';
 
 enum ToolName {
   ReadFile = 'read_file',
-  ReadMultipleFiles = 'read_multiple_files',
   WriteFile = 'write_file',
   EditFile = 'edit_file',
-  CreateDirectory = 'create_directory',
-  ListDirectory = 'list_directory',
-  DirectoryTree = 'directory_tree',
-  MoveFile = 'move_file',
-  SearchFiles = 'search_files',
-  GetFileInfo = 'get_file_info',
 }
 
 // Command line argument parsing
@@ -116,10 +108,6 @@ const ReadFileArgsSchema = z.object({
   path: z.string(),
 });
 
-const ReadMultipleFilesArgsSchema = z.object({
-  paths: z.array(z.string()),
-});
-
 const WriteFileArgsSchema = z.object({
   path: z.string(),
   content: z.string(),
@@ -136,45 +124,8 @@ const EditFileArgsSchema = z.object({
   dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format'),
 });
 
-const CreateDirectoryArgsSchema = z.object({
-  path: z.string(),
-});
-
-const ListDirectoryArgsSchema = z.object({
-  path: z.string(),
-});
-
-const DirectoryTreeArgsSchema = z.object({
-  path: z.string(),
-});
-
-const MoveFileArgsSchema = z.object({
-  source: z.string(),
-  destination: z.string(),
-});
-
-const SearchFilesArgsSchema = z.object({
-  path: z.string(),
-  pattern: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([]),
-});
-
-const GetFileInfoArgsSchema = z.object({
-  path: z.string(),
-});
-
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
-
-interface FileInfo {
-  size: number;
-  created: Date;
-  modified: Date;
-  accessed: Date;
-  isDirectory: boolean;
-  isFile: boolean;
-  permissions: string;
-}
 
 // Server setup
 const server = new Server(
@@ -188,66 +139,6 @@ const server = new Server(
     },
   },
 );
-
-// Tool implementations
-async function getFileStats(filePath: string): Promise<FileInfo> {
-  const stats = await fs.stat(filePath);
-  return {
-    size: stats.size,
-    created: stats.birthtime,
-    modified: stats.mtime,
-    accessed: stats.atime,
-    isDirectory: stats.isDirectory(),
-    isFile: stats.isFile(),
-    permissions: stats.mode.toString(8).slice(-3),
-  };
-}
-
-async function searchFiles(
-  rootPath: string,
-  pattern: string,
-  excludePatterns: string[] = [],
-): Promise<string[]> {
-  const results: string[] = [];
-
-  async function search(currentPath: string) {
-    const entries = await fs.readdir(currentPath, {withFileTypes: true});
-
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
-
-      try {
-        // Validate each path before processing
-        await validatePath(fullPath);
-
-        // Check if path matches any exclude pattern
-        const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(pattern => {
-          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
-          return minimatch(relativePath, globPattern, {dot: true});
-        });
-
-        if (shouldExclude) {
-          continue;
-        }
-
-        if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
-          results.push(fullPath);
-        }
-
-        if (entry.isDirectory()) {
-          await search(fullPath);
-        }
-      } catch (error) {
-        // Skip invalid paths during search
-        continue;
-      }
-    }
-  }
-
-  await search(rootPath);
-  return results;
-}
 
 // file editing and diffing utilities
 function normalizeLineEndings(text: string): string {
@@ -365,16 +256,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ReadFileArgsSchema) as ToolInput,
       },
       {
-        name: ToolName.ReadMultipleFiles,
-        description:
-          'Read the contents of multiple files simultaneously. This is more ' +
-          'efficient than reading files one by one when you need to analyze ' +
-          "or compare multiple files. Each file's content is returned with its " +
-          "path as a reference. Failed reads for individual files won't stop " +
-          'the entire operation. Only works within allowed directories.',
-        inputSchema: zodToJsonSchema(ReadMultipleFilesArgsSchema) as ToolInput,
-      },
-      {
         name: ToolName.WriteFile,
         description:
           'Create a new file or completely overwrite an existing file with new content. ' +
@@ -389,61 +270,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           'with new content. Returns a git-style diff showing the changes made. ' +
           'Only works within allowed directories.',
         inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput,
-      },
-      {
-        name: ToolName.CreateDirectory,
-        description:
-          'Create a new directory or ensure a directory exists. Can create multiple ' +
-          'nested directories in one operation. If the directory already exists, ' +
-          'this operation will succeed silently. Perfect for setting up directory ' +
-          'structures for projects or ensuring required paths exist. Only works within allowed directories.',
-        inputSchema: zodToJsonSchema(CreateDirectoryArgsSchema) as ToolInput,
-      },
-      {
-        name: ToolName.ListDirectory,
-        description:
-          'Get a detailed listing of all files and directories in a specified path. ' +
-          'Results clearly distinguish between files and directories with [FILE] and [DIR] ' +
-          'prefixes. This tool is essential for understanding directory structure and ' +
-          'finding specific files within a directory. Only works within allowed directories.',
-        inputSchema: zodToJsonSchema(ListDirectoryArgsSchema) as ToolInput,
-      },
-      {
-        name: ToolName.DirectoryTree,
-        description:
-          'Get a recursive tree view of files and directories as a JSON structure. ' +
-          "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
-          'Files have no children array, while directories always have a children array (which may be empty). ' +
-          'The output is formatted with 2-space indentation for readability. Only works within allowed directories.',
-        inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
-      },
-      {
-        name: ToolName.MoveFile,
-        description:
-          'Move or rename files and directories. Can move files between directories ' +
-          'and rename them in a single operation. If the destination exists, the ' +
-          'operation will fail. Works across different directories and can be used ' +
-          'for simple renaming within the same directory. Both source and destination must be within allowed directories.',
-        inputSchema: zodToJsonSchema(MoveFileArgsSchema) as ToolInput,
-      },
-      {
-        name: ToolName.SearchFiles,
-        description:
-          'Recursively search for files and directories matching a pattern. ' +
-          'Searches through all subdirectories from the starting path. The search ' +
-          'is case-insensitive and matches partial names. Returns full paths to all ' +
-          "matching items. Great for finding files when you don't know their exact location. " +
-          'Only searches within allowed directories.',
-        inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
-      },
-      {
-        name: ToolName.GetFileInfo,
-        description:
-          'Retrieve detailed metadata about a file or directory. Returns comprehensive ' +
-          'information including size, creation time, last modified time, permissions, ' +
-          'and type. This tool is perfect for understanding file characteristics ' +
-          'without reading the actual content. Only works within allowed directories.',
-        inputSchema: zodToJsonSchema(GetFileInfoArgsSchema) as ToolInput,
       },
     ],
   };
@@ -463,28 +289,6 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         const content = await fs.readFile(validPath, 'utf-8');
         return {
           content: [{type: 'text', text: content}],
-        };
-      }
-
-      case ToolName.ReadMultipleFiles: {
-        const parsed = ReadMultipleFilesArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for read_multiple_files: ${parsed.error}`);
-        }
-        const results = await Promise.all(
-          parsed.data.paths.map(async (filePath: string) => {
-            try {
-              const validPath = await validatePath(filePath);
-              const content = await fs.readFile(validPath, 'utf-8');
-              return `${filePath}:\n${content}\n`;
-            } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              return `${filePath}: Error - ${errorMessage}`;
-            }
-          }),
-        );
-        return {
-          content: [{type: 'text', text: results.join('\n---\n')}],
         };
       }
 
@@ -509,133 +313,6 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
         return {
           content: [{type: 'text', text: result}],
-        };
-      }
-
-      case ToolName.CreateDirectory: {
-        const parsed = CreateDirectoryArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for create_directory: ${parsed.error}`);
-        }
-        const validPath = await validatePath(parsed.data.path);
-        await fs.mkdir(validPath, {recursive: true});
-        return {
-          content: [{type: 'text', text: `Successfully created directory ${parsed.data.path}`}],
-        };
-      }
-
-      case ToolName.ListDirectory: {
-        const parsed = ListDirectoryArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for list_directory: ${parsed.error}`);
-        }
-        const validPath = await validatePath(parsed.data.path);
-        const entries = await fs.readdir(validPath, {withFileTypes: true});
-        const formatted = entries
-          .map(entry => `${entry.isDirectory() ? '[DIR]' : '[FILE]'} ${entry.name}`)
-          .join('\n');
-        return {
-          content: [{type: 'text', text: formatted}],
-        };
-      }
-
-      case ToolName.DirectoryTree: {
-        const parsed = DirectoryTreeArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
-        }
-
-        interface TreeEntry {
-          name: string;
-          type: 'file' | 'directory';
-          children?: TreeEntry[];
-        }
-
-        async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-          const validPath = await validatePath(currentPath);
-          const entries = await fs.readdir(validPath, {withFileTypes: true});
-          const result: TreeEntry[] = [];
-
-          for (const entry of entries) {
-            const entryData: TreeEntry = {
-              name: entry.name,
-              type: entry.isDirectory() ? 'directory' : 'file',
-            };
-
-            if (entry.isDirectory()) {
-              const subPath = path.join(currentPath, entry.name);
-              entryData.children = await buildTree(subPath);
-            }
-
-            result.push(entryData);
-          }
-
-          return result;
-        }
-
-        const treeData = await buildTree(parsed.data.path);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(treeData, null, 2),
-            },
-          ],
-        };
-      }
-
-      case ToolName.MoveFile: {
-        const parsed = MoveFileArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for move_file: ${parsed.error}`);
-        }
-        const validSourcePath = await validatePath(parsed.data.source);
-        const validDestPath = await validatePath(parsed.data.destination);
-        await fs.rename(validSourcePath, validDestPath);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}`,
-            },
-          ],
-        };
-      }
-
-      case ToolName.SearchFiles: {
-        const parsed = SearchFilesArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
-        }
-        const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(
-          validPath,
-          parsed.data.pattern,
-          parsed.data.excludePatterns,
-        );
-        return {
-          content: [
-            {type: 'text', text: results.length > 0 ? results.join('\n') : 'No matches found'},
-          ],
-        };
-      }
-
-      case ToolName.GetFileInfo: {
-        const parsed = GetFileInfoArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for get_file_info: ${parsed.error}`);
-        }
-        const validPath = await validatePath(parsed.data.path);
-        const info = await getFileStats(validPath);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: Object.entries(info)
-                .map(([key, value]) => `${key}: ${value}`)
-                .join('\n'),
-            },
-          ],
         };
       }
 

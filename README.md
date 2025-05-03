@@ -5,7 +5,8 @@ A simple library for editing files using MCP.
 ## Usage
 
 ```bash
-npm run build && node build/index.js ./servers/filesystem/dist/index.js ~/test/1
+npm run build:all
+node build/index.js ./servers/filesystem/dist/index.js ~/test/1
 ```
 
 ## Testing
