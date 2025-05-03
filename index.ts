@@ -1,9 +1,5 @@
 import {Anthropic} from '@anthropic-ai/sdk';
-import {
-  MessageParam,
-  Tool,
-  ContentBlockParam,
-} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
+import {MessageParam, Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import readline from 'readline/promises';
@@ -11,9 +7,14 @@ import fs from 'fs/promises';
 import path from 'path';
 import {OpenAI} from 'openai';
 import {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
+import {ModelEnum} from 'llm-info';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// Use model enums from llm-info package
+const ANTHROPIC_MODEL = ModelEnum['claude-3-5-sonnet-20241022'];
+const OPENAI_MODEL = ModelEnum['gpt-4o'];
 
 if (!ANTHROPIC_API_KEY) {
   throw new Error('ANTHROPIC_API_KEY is not set');
@@ -127,7 +128,7 @@ export class MCPClient {
     finalText.push(`[Follow up: ${followup.content}]`);
 
     const response = await this.anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: ANTHROPIC_MODEL,
       max_tokens: 1000,
       messages,
       tools: this.tools,
@@ -202,7 +203,7 @@ export class MCPClient {
     const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
     const response = await this.openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: OPENAI_MODEL,
       messages: openAIMessages,
       tools: this.tools.map(tool => ({
         type: 'function',
@@ -265,7 +266,7 @@ export class MCPClient {
       const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: OPENAI_MODEL,
         messages: openAIMessages,
         tools: this.tools.map(tool => ({
           type: 'function',
@@ -301,7 +302,7 @@ export class MCPClient {
       return {finalText, toolResults};
     } else {
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: ANTHROPIC_MODEL,
         max_tokens: 1000,
         messages,
         tools: this.tools,

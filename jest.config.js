@@ -10,4 +10,6 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   testTimeout: 20000, // 20 seconds
+  maxWorkers: 1, // Run tests sequentially
+  maxConcurrency: 1, // Ensure only one test runs at a time
 };
