@@ -15,7 +15,6 @@ import {zodToJsonSchema} from 'zod-to-json-schema';
 import {diffLines, createTwoFilesPatch} from 'diff';
 
 enum ToolName {
-  WriteFile = 'write_file',
   EditFile = 'edit_file',
 }
 
@@ -103,11 +102,6 @@ async function validatePath(requestedPath: string): Promise<string> {
 }
 
 // Schema definitions
-const WriteFileArgsSchema = z.object({
-  path: z.string(),
-  content: z.string(),
-});
-
 const EditOperation = z.object({
   oldText: z.string().describe('Text to search for - must match exactly'),
   newText: z.string().describe('Text to replace with'),
@@ -115,7 +109,11 @@ const EditOperation = z.object({
 
 const EditFileArgsSchema = z.object({
   path: z.string(),
-  edits: z.array(EditOperation),
+  content: z
+    .string()
+    .optional()
+    .describe('Complete file content to write (for new files or complete overwrites)'),
+  edits: z.array(EditOperation).optional().describe('List of edits to apply (for partial edits)'),
   dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format'),
 });
 
@@ -161,67 +159,79 @@ function createUnifiedDiff(
 
 async function applyFileEdits(
   filePath: string,
-  edits: Array<{oldText: string; newText: string}>,
+  edits: Array<{oldText: string; newText: string}> | undefined,
+  content: string | undefined,
   dryRun = false,
 ): Promise<string> {
-  // Read file content and normalize line endings
-  const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
+  let originalContent = '';
+  try {
+    originalContent = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
+  } catch (error) {
+    // File doesn't exist yet, treat as empty content
+    originalContent = '';
+  }
 
-  // Apply edits sequentially
-  let modifiedContent = content;
-  for (const edit of edits) {
-    const normalizedOld = normalizeLineEndings(edit.oldText);
-    const normalizedNew = normalizeLineEndings(edit.newText);
+  let modifiedContent = originalContent;
 
-    // If exact match exists, use it
-    if (modifiedContent.includes(normalizedOld)) {
-      modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
-      continue;
-    }
+  if (content !== undefined) {
+    // Complete file content provided, use it directly
+    modifiedContent = normalizeLineEndings(content);
+  } else if (edits !== undefined) {
+    // Apply edits sequentially
+    for (const edit of edits) {
+      const normalizedOld = normalizeLineEndings(edit.oldText);
+      const normalizedNew = normalizeLineEndings(edit.newText);
 
-    // Otherwise, try line-by-line matching with flexibility for whitespace
-    const oldLines = normalizedOld.split('\n');
-    const contentLines = modifiedContent.split('\n');
-    let matchFound = false;
+      // If exact match exists, use it
+      if (modifiedContent.includes(normalizedOld)) {
+        modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
+        continue;
+      }
 
-    for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
-      const potentialMatch = contentLines.slice(i, i + oldLines.length);
+      // Otherwise, try line-by-line matching with flexibility for whitespace
+      const oldLines = normalizedOld.split('\n');
+      const contentLines = modifiedContent.split('\n');
+      let matchFound = false;
 
-      // Compare lines with normalized whitespace
-      const isMatch = oldLines.every((oldLine, j) => {
-        const contentLine = potentialMatch[j];
-        return oldLine.trim() === contentLine.trim();
-      });
+      for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
+        const potentialMatch = contentLines.slice(i, i + oldLines.length);
 
-      if (isMatch) {
-        // Preserve original indentation of first line
-        const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
-        const newLines = normalizedNew.split('\n').map((line, j) => {
-          if (j === 0) return originalIndent + line.trimStart();
-          // For subsequent lines, try to preserve relative indentation
-          const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
-          const newIndent = line.match(/^\s*/)?.[0] || '';
-          if (oldIndent && newIndent) {
-            const relativeIndent = newIndent.length - oldIndent.length;
-            return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
-          }
-          return line;
+        // Compare lines with normalized whitespace
+        const isMatch = oldLines.every((oldLine, j) => {
+          const contentLine = potentialMatch[j];
+          return oldLine.trim() === contentLine.trim();
         });
 
-        contentLines.splice(i, oldLines.length, ...newLines);
-        modifiedContent = contentLines.join('\n');
-        matchFound = true;
-        break;
-      }
-    }
+        if (isMatch) {
+          // Preserve original indentation of first line
+          const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
+          const newLines = normalizedNew.split('\n').map((line, j) => {
+            if (j === 0) return originalIndent + line.trimStart();
+            // For subsequent lines, try to preserve relative indentation
+            const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
+            const newIndent = line.match(/^\s*/)?.[0] || '';
+            if (oldIndent && newIndent) {
+              const relativeIndent = newIndent.length - oldIndent.length;
+              return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
+            }
+            return line;
+          });
 
-    if (!matchFound) {
-      return `Error: Could not find exact match for edit:\n${edit.oldText}`;
+          contentLines.splice(i, oldLines.length, ...newLines);
+          modifiedContent = contentLines.join('\n');
+          matchFound = true;
+          break;
+        }
+      }
+
+      if (!matchFound) {
+        return `Error: Could not find exact match for edit:\n${edit.oldText}`;
+      }
     }
   }
 
   // Create unified diff
-  const diff = createUnifiedDiff(content, modifiedContent, filePath);
+  const diff = createUnifiedDiff(originalContent, modifiedContent, filePath);
 
   // Format diff with appropriate number of backticks
   let numBackticks = 3;
@@ -234,7 +244,9 @@ async function applyFileEdits(
     await fs.writeFile(filePath, modifiedContent, 'utf-8');
   }
 
-  const response = `Successfully updated file ${filePath} with diff:\n${formattedDiff}`;
+  const response = `Successfully ${
+    originalContent ? 'updated' : 'created'
+  } file ${filePath} with diff:\n${formattedDiff}`;
 
   return response;
 }
@@ -244,18 +256,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: ToolName.WriteFile,
-        description:
-          'Create a new file or completely overwrite an existing file with new content. ' +
-          'Use with caution as it will overwrite existing files without warning. ' +
-          'Handles text content with proper encoding. Only works within allowed directories.',
-        inputSchema: zodToJsonSchema(WriteFileArgsSchema) as ToolInput,
-      },
-      {
         name: ToolName.EditFile,
         description:
-          'Make line-based edits to a text file. Each edit replaces exact line sequences ' +
-          'with new content. Returns a git-style diff showing the changes made. ' +
+          'Create a new file, overwrite an existing file, or make selective edits to a file. ' +
+          'For new files or complete overwrites, use the content parameter. ' +
+          'For partial edits, use the edits parameter to specify text replacements. ' +
+          'Note: content and edits parameters are mutually exclusive - use one or the other, not both. ' +
+          'Returns a git-style diff showing the changes made. ' +
           'Only works within allowed directories.',
         inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput,
       },
@@ -268,25 +275,26 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     const {name, arguments: args} = request.params;
 
     switch (name as ToolName) {
-      case ToolName.WriteFile: {
-        const parsed = WriteFileArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
-        }
-        const validPath = await validatePath(parsed.data.path);
-        await fs.writeFile(validPath, parsed.data.content, 'utf-8');
-        return {
-          content: [{type: 'text', text: `Successfully wrote to ${parsed.data.path}`}],
-        };
-      }
-
       case ToolName.EditFile: {
         const parsed = EditFileArgsSchema.safeParse(args);
         if (!parsed.success) {
           throw new Error(`Invalid arguments for edit_file: ${parsed.error}`);
         }
+        if (parsed.data.content === undefined && parsed.data.edits === undefined) {
+          throw new Error('Either content or edits must be provided');
+        }
+        if (parsed.data.content !== undefined && parsed.data.edits !== undefined) {
+          throw new Error(
+            'Cannot provide both content and edits - use content for complete file writes and edits for partial changes',
+          );
+        }
         const validPath = await validatePath(parsed.data.path);
-        const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
+        const result = await applyFileEdits(
+          validPath,
+          parsed.data.edits,
+          parsed.data.content,
+          parsed.data.dryRun,
+        );
         return {
           content: [{type: 'text', text: result}],
         };

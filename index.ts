@@ -38,8 +38,6 @@ export class MCPClient {
       }
     }
 
-    console.log('File contents:', this.fileContents);
-
     try {
       const isJs = serverScriptPath.endsWith('.js');
       const isPy = serverScriptPath.endsWith('.py');
@@ -83,7 +81,6 @@ export class MCPClient {
       .join('\n');
 
     const messageContent = queryWithFileContents + '\n' + query;
-    console.log('Message content:', messageContent);
 
     const messages: MessageParam[] = [
       {

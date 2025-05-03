@@ -39,8 +39,9 @@ describe('MCP File Edit', () => {
 
     // Test editing file in allowed directory
     const response = await mcpClient.processQuery(
-      `update ${testFilePath} to change add to multiply, update function calls as well`,
+      `update ${testFilePath} to change add to multiply. update function calls add(1,2) to multiply(1,2)`,
     );
+    console.log('Response:', response);
     expect(response).toContain('Successfully updated file');
 
     // Verify the file was edited correctly
@@ -61,11 +62,35 @@ describe('MCP File Edit', () => {
     await mcpClient.connectToServer(serverScriptPath, [path.join(testDir, '1')]);
 
     // Test editing file in non-allowed directory
-    await mcpClient.processQuery(`update ${nonAllowedPath} to change add to multiply`);
+    const response = await mcpClient.processQuery(
+      `update ${nonAllowedPath} to change add to multiply. update function calls add(1,2) to multiply(1,2)`,
+    );
+    console.log('Response:', response);
 
     // Verify the file was not edited
     const editedContent = await fs.readFile(nonAllowedPath, 'utf-8');
     expect(editedContent).toContain('function add(a, b)');
     expect(editedContent).toContain('console.log(add(1, 2));');
+  });
+
+  test('should create new file in allowed directory', async () => {
+    // Connect to server with test directory 1 allowed
+    await mcpClient.connectToServer(serverScriptPath, [path.join(testDir, '1')]);
+
+    // Define path for new file
+    const newFilePath = path.join(testDir, '1', 'new-file.js');
+
+    // Test creating a new file
+    const response = await mcpClient.processQuery(
+      `create new file ${newFilePath} with content: function greet(name) { return "Hello, " + name; }`,
+    );
+    console.log('Response:', response);
+    expect(response).toContain('Successfully created file');
+
+    // Verify the file was created with correct content
+    const fileContent = await fs.readFile(newFilePath, 'utf-8');
+    const fileWithoutNewlines = fileContent.replace(/\r\n/g, '').replace(/\n/g, '');
+    console.log('File content:', fileWithoutNewlines);
+    expect(fileWithoutNewlines).toEqual(`function greet(name) { return "Hello, " + name; }`);
   });
 });
