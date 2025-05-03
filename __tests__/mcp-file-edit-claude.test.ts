@@ -4,7 +4,7 @@ import path from 'path';
 
 describe('MCP File Edit', () => {
   let mcpClient: MCPClient;
-  const testDir = path.join(process.cwd(), 'sample');
+  const testDir = path.join(process.cwd(), 'sample-claude');
 
   beforeAll(async () => {
     // Create test directories

@@ -4,7 +4,7 @@ import path from 'path';
 
 describe('MCP File Edit with OpenAI', () => {
   let mcpClient: MCPClient;
-  const testDir = path.join(process.cwd(), 'sample');
+  const testDir = path.join(process.cwd(), 'sample-openai');
 
   beforeAll(async () => {
     // Create test directories
