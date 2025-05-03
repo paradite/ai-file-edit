@@ -109,6 +109,17 @@ export class FileEditTool {
     );
   }
 
+  private async updateFileContents() {
+    // read all files in allowedDirectories
+    for (const dir of this.allowedDirectories) {
+      const files = await fs.readdir(dir);
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        this.fileContents[filePath] = await fs.readFile(filePath, 'utf8');
+      }
+    }
+  }
+
   private async handleAnthropicToolUse(
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
@@ -162,9 +173,19 @@ export class FileEditTool {
     toolResults.push(result);
     finalText.push(`[Tool ${toolName} returned: ${result}]`);
 
+    // Update file contents after tool call
+    await this.updateFileContents();
+
+    // Update the messages with latest file contents
+    const queryWithFileContents = Object.entries(this.fileContents)
+      .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
+      .join('\n');
+
     const followup = {
       role: 'user',
-      content: followupTemplate(result),
+      content: `[Files have been updated after the tool call]\n\n${queryWithFileContents}\n\n${followupTemplate(
+        result,
+      )}`,
     } as MessageParam;
 
     messages.push(followup);
@@ -259,9 +280,19 @@ export class FileEditTool {
     toolResults.push(result);
     finalText.push(`[Tool ${toolName} returned: ${result}]`);
 
+    // Update file contents after tool call
+    await this.updateFileContents();
+
+    // Update the messages with latest file contents
+    const queryWithFileContents = Object.entries(this.fileContents)
+      .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
+      .join('\n');
+
     const followup = {
       role: 'user',
-      content: followupTemplate(result),
+      content: `[Files have been updated after the tool call]\n\n${queryWithFileContents}\n\n${followupTemplate(
+        result,
+      )}`,
     } as MessageParam;
 
     messages.push(followup);
@@ -333,10 +364,10 @@ export class FileEditTool {
   ): Promise<{finalText: string[]; toolResults: string[]}> {
     // prepend the file contents to the query
     const queryWithFileContents = Object.entries(this.fileContents)
-      .map(([file, content]) => `[File ${file}]:\n${content}`)
+      .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
       .join('\n');
 
-    const messageContent = queryWithFileContents + '\n' + query;
+    const messageContent = queryWithFileContents + '\n\n' + query;
 
     const messages: MessageParam[] = [
       {

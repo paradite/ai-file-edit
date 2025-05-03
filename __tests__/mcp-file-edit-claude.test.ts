@@ -33,8 +33,8 @@ describe('File Edit Tool with Claude', () => {
     const response = await fileEditTool.processQuery(
       `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
-    console.log('Tool results:', response.toolResults);
-    console.log('Response:', response.finalText);
+    console.log('Tool results:', response.toolResults.join('\n'));
+    console.log('Response:', response.finalText.join('\n'));
     expect(response.finalText.join('\n')).toContain('Successfully updated file');
 
     // Verify the file was edited correctly
@@ -60,8 +60,8 @@ describe('File Edit Tool with Claude', () => {
     const response = await fileEditTool.processQuery(
       `update ${nonAllowedPath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
-    console.log('Tool results:', response.toolResults);
-    console.log('Response:', response.finalText);
+    console.log('Tool results:', response.toolResults.join('\n'));
+    console.log('Response:', response.finalText.join('\n'));
 
     // Verify the file was not edited
     const editedContent = await fs.readFile(nonAllowedPath, 'utf-8');
@@ -77,8 +77,8 @@ describe('File Edit Tool with Claude', () => {
     const response = await fileEditTool.processQuery(
       `create new file ${newFilePath} with content: function greet(name) { return "Hello, " + name; }`,
     );
-    console.log('Tool results:', response.toolResults);
-    console.log('Response:', response.finalText);
+    console.log('Tool results:', response.toolResults.join('\n'));
+    console.log('Response:', response.finalText.join('\n'));
     expect(response.finalText.join('\n')).toContain('Successfully created file');
 
     // Verify the file was created with correct content
