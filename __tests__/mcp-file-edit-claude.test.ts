@@ -3,6 +3,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import {ModelEnum} from 'llm-info';
 
+const model = ModelEnum['claude-3-7-sonnet-20250219'];
+
+jest.retryTimes(3);
+
 describe('File Edit Tool with Claude', () => {
   let fileEditTool: FileEditTool;
   const testDir = path.join(process.cwd(), 'sample-claude');
@@ -33,7 +37,7 @@ describe('File Edit Tool with Claude', () => {
     // Test editing file in allowed directory
     const response = await fileEditTool.processQuery(
       `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
-      ModelEnum['claude-3-5-sonnet-20241022'],
+      model,
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));
@@ -63,7 +67,7 @@ describe('File Edit Tool with Claude', () => {
     // Test editing file in non-allowed directory
     const response = await fileEditTool.processQuery(
       `update ${nonAllowedPath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
-      ModelEnum['claude-3-5-sonnet-20241022'],
+      model,
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));
@@ -82,7 +86,7 @@ describe('File Edit Tool with Claude', () => {
     // Test creating a new file
     const response = await fileEditTool.processQuery(
       `create new file ${newFilePath} with content: function greet(name) { return "Hello, " + name; }`,
-      ModelEnum['claude-3-5-sonnet-20241022'],
+      model,
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));

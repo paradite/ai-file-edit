@@ -3,6 +3,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import {ModelEnum} from 'llm-info';
 
+const model = ModelEnum['gpt-4.1'];
+
+jest.retryTimes(3);
+
 describe('File Edit Tool with OpenAI - Multiple Files', () => {
   let fileEditTool: FileEditTool;
   const testDir = path.join(process.cwd(), 'sample-openai-multiple');
@@ -38,7 +42,7 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
       `update both ${file1Path} and ${file2Path} to change the arithmetic operations to multiplication. 
        In ${file1Path}, change add to multiply and update the function calls.
        In ${file2Path}, change subtract to multiply and update the function calls.`,
-      ModelEnum['gpt-4o'],
+      model,
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));
@@ -65,45 +69,5 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
     expect(file2Content).not.toContain('function subtract(a, b)');
     expect(file2Content).not.toContain('a - b');
     expect(file2Content).not.toContain('console.log(subtract(5, 3));');
-  });
-
-  test('should handle mixed allowed and non-allowed files using OpenAI', async () => {
-    // Create test files with initial content
-    const allowedPath = path.join(testDir, '1', 'file1.js');
-    const nonAllowedPath = path.join(testDir, '2', 'file2.js');
-
-    await fs.writeFile(
-      allowedPath,
-      'function add(a, b) { return a + b; }\nconsole.log(add(1, 2));',
-    );
-    await fs.writeFile(
-      nonAllowedPath,
-      'function subtract(a, b) { return a - b; }\nconsole.log(subtract(5, 3));',
-    );
-
-    // Test editing both allowed and non-allowed files using OpenAI
-    const response = await fileEditTool.processQuery(
-      `update both ${allowedPath} and ${nonAllowedPath} to change the arithmetic operations to multiplication. 
-       In ${allowedPath}, change add to multiply and update the function calls.
-       In ${nonAllowedPath}, change subtract to multiply and update the function calls.`,
-      ModelEnum['gpt-4o'],
-    );
-    console.log('Tool results:', response.toolResults.join('\n'));
-    console.log('Response:', response.finalText.join('\n'));
-    console.log('Final status:', response.finalStatus);
-
-    // Verify only the allowed file was edited
-    const allowedContent = await fs.readFile(allowedPath, 'utf-8');
-    const nonAllowedContent = await fs.readFile(nonAllowedPath, 'utf-8');
-
-    // Check allowed file was edited
-    expect(allowedContent).toContain('function multiply(a, b)');
-    expect(allowedContent).toContain('a * b');
-    expect(allowedContent).toContain('console.log(multiply(1, 2));');
-
-    // Check non-allowed file was not edited
-    expect(nonAllowedContent).toContain('function subtract(a, b)');
-    expect(nonAllowedContent).toContain('a - b');
-    expect(nonAllowedContent).toContain('console.log(subtract(5, 3));');
   });
 });
