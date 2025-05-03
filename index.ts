@@ -3,6 +3,8 @@ import {MessageParam, Tool} from '@anthropic-ai/sdk/resources/messages/messages.
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import readline from 'readline/promises';
+import fs from 'fs/promises';
+import path from 'path';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 if (!ANTHROPIC_API_KEY) {
@@ -15,6 +17,7 @@ export class MCPClient {
   private transport: StdioClientTransport | null = null;
   private tools: Tool[] = [];
   private allowedDirectories: string[] = [];
+  private fileContents: Record<string, string> = {};
 
   constructor() {
     this.anthropic = new Anthropic({
@@ -25,6 +28,18 @@ export class MCPClient {
 
   async connectToServer(serverScriptPath: string, allowedDirectories: string[] = []) {
     this.allowedDirectories = allowedDirectories;
+
+    // read all files in allowedDirectories
+    for (const dir of allowedDirectories) {
+      const files = await fs.readdir(dir);
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        this.fileContents[filePath] = await fs.readFile(filePath, 'utf8');
+      }
+    }
+
+    console.log('File contents:', this.fileContents);
+
     try {
       const isJs = serverScriptPath.endsWith('.js');
       const isPy = serverScriptPath.endsWith('.py');
@@ -62,10 +77,18 @@ export class MCPClient {
   }
 
   async processQuery(query: string) {
+    // prepend the file contents to the query
+    const queryWithFileContents = Object.entries(this.fileContents)
+      .map(([file, content]) => `[File ${file}]:\n${content}`)
+      .join('\n');
+
+    const messageContent = queryWithFileContents + '\n' + query;
+    console.log('Message content:', messageContent);
+
     const messages: MessageParam[] = [
       {
         role: 'user',
-        content: query,
+        content: messageContent,
       },
     ];
 
