@@ -1,7 +1,6 @@
 import {Anthropic} from '@anthropic-ai/sdk';
 import {MessageParam, Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import fs from 'fs/promises';
-import path from 'path';
 import {OpenAI} from 'openai';
 import {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
 import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
@@ -45,16 +44,18 @@ export class FileEditTool {
   private tools: Tool[] = [];
   private modelName: ModelEnum;
   private provider: AI_PROVIDER_TYPE;
-
+  private fileContext: string[] = [];
   constructor(
     allowedDirectories: string[] = [],
     modelName: ModelEnum,
     provider: AI_PROVIDER_TYPE,
     apiKey: string,
+    fileContext: string[] = [],
   ) {
     this.allowedDirectories = allowedDirectories;
     this.modelName = modelName;
     this.provider = provider;
+    this.fileContext = fileContext;
 
     if (provider === AI_PROVIDERS.ANTHROPIC) {
       this.anthropic = new Anthropic({
@@ -88,34 +89,15 @@ export class FileEditTool {
         },
       },
     ];
-
-    // Initialize file contents
-    this.initializeFileContents();
   }
 
-  private async initializeFileContents() {
-    // read all files in allowedDirectories
-    for (const dir of this.allowedDirectories) {
-      const files = await fs.readdir(dir);
-      for (const file of files) {
-        const filePath = path.join(dir, file);
+  private async refreshFileContents() {
+    // read only the files specified in fileContext
+    for (const filePath of this.fileContext) {
+      try {
         this.fileContents[filePath] = await fs.readFile(filePath, 'utf8');
-      }
-    }
-
-    console.log(
-      'Initialized with tools:',
-      this.tools.map(({name}) => name),
-    );
-  }
-
-  private async updateFileContents() {
-    // read all files in allowedDirectories
-    for (const dir of this.allowedDirectories) {
-      const files = await fs.readdir(dir);
-      for (const file of files) {
-        const filePath = path.join(dir, file);
-        this.fileContents[filePath] = await fs.readFile(filePath, 'utf8');
+      } catch (error) {
+        console.error(`Error reading file ${filePath}:`, error);
       }
     }
   }
@@ -179,12 +161,14 @@ export class FileEditTool {
     finalText.push(`[Tool ${toolName} returned: ${result}]`);
 
     // Update file contents after tool call
-    await this.updateFileContents();
+    await this.refreshFileContents();
 
     // Update the messages with latest file contents
-    const queryWithFileContents = Object.entries(this.fileContents)
-      .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
-      .join('\n\n');
+    const queryWithFileContents = this.fileContents
+      ? Object.entries(this.fileContents)
+          .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
+          .join('\n\n')
+      : '';
 
     const followup = {
       role: 'user',
@@ -344,16 +328,23 @@ export class FileEditTool {
     };
   }
 
-  async processQuery(
-    query: string,
-  ): Promise<{finalText: string[]; toolResults: string[]; finalStatus: ToolCallStatus}> {
+  async processQuery(query: string): Promise<{
+    finalText: string[];
+    toolResults: string[];
+    finalStatus: ToolCallStatus;
+    toolCallCount: number;
+  }> {
     let toolCallCount = 0;
     let finalStatus: ToolCallStatus = 'success';
 
+    await this.refreshFileContents();
+
     // prepend the file contents to the query
-    const queryWithFileContents = Object.entries(this.fileContents)
-      .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
-      .join('\n\n');
+    const queryWithFileContents = this.fileContents
+      ? Object.entries(this.fileContents)
+          .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
+          .join('\n\n')
+      : '';
 
     const messageContent = queryWithFileContents + '\n\n' + query;
 
@@ -411,7 +402,7 @@ export class FileEditTool {
         finalStatus = 'no_tool_calls';
       }
 
-      return {finalText, toolResults, finalStatus};
+      return {finalText, toolResults, finalStatus, toolCallCount};
     } else if (this.provider === AI_PROVIDERS.ANTHROPIC) {
       const response = await this.anthropic?.messages.create({
         model: this.modelName,
@@ -448,12 +439,13 @@ export class FileEditTool {
         finalStatus = 'no_tool_calls';
       }
 
-      return {finalText, toolResults, finalStatus};
+      return {finalText, toolResults, finalStatus, toolCallCount};
     } else {
       return {
         finalText: [`[Unsupported model: ${this.modelName}]`],
         toolResults: [],
         finalStatus: 'failure',
+        toolCallCount: 0,
       };
     }
   }

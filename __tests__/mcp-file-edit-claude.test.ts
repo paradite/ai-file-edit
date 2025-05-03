@@ -22,15 +22,6 @@ describe('File Edit Tool with Claude', () => {
     await fs.rm(testDir, {recursive: true, force: true});
   });
 
-  beforeEach(() => {
-    fileEditTool = new FileEditTool(
-      [path.join(testDir, '1')],
-      model,
-      AI_PROVIDERS.ANTHROPIC,
-      process.env.ANTHROPIC_API_KEY || '',
-    );
-  });
-
   test('should allow editing files in allowed directory', async () => {
     // Create a test file with initial content
     const testFilePath = path.join(testDir, '1', 'edit-test.js');
@@ -39,15 +30,26 @@ describe('File Edit Tool with Claude', () => {
       'function add(a, b) { return a + b; }\nconsole.log(add(1, 2));',
     );
 
+    fileEditTool = new FileEditTool(
+      [path.join(testDir, '1')],
+      model,
+      AI_PROVIDERS.ANTHROPIC,
+      process.env.ANTHROPIC_API_KEY || '',
+      [path.join(testDir, '1', 'edit-test.js')],
+    );
+
     // Test editing file in allowed directory
     const response = await fileEditTool.processQuery(
       `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
-    console.log('Tool results:', response.toolResults.join('\n'));
-    console.log('Response:', response.finalText.join('\n'));
-    console.log('Final status:', response.finalStatus);
+    // console.log('Tool results:', response.toolResults.join('\n'));
+    // console.log('Response:', response.finalText.join('\n'));
+    // console.log('Final status:', response.finalStatus);
+    // console.log('Tool call count:', response.toolCallCount);
     expect(response.finalText.join('\n')).toContain('Successfully updated file');
     expect(response.finalStatus).toBe('success');
+    expect(response.toolCallCount).toBeGreaterThanOrEqual(1);
+    expect(response.toolCallCount).toBeLessThanOrEqual(2);
 
     // Verify the file was edited correctly
     const editedContent = await fs.readFile(testFilePath, 'utf-8');
@@ -68,13 +70,22 @@ describe('File Edit Tool with Claude', () => {
       'function add(a, b) { return a + b; }\nconsole.log(add(1, 2));',
     );
 
+    fileEditTool = new FileEditTool(
+      [path.join(testDir, '1')],
+      model,
+      AI_PROVIDERS.ANTHROPIC,
+      process.env.ANTHROPIC_API_KEY || '',
+      [path.join(testDir, '1', 'edit-test.js')],
+    );
+
     // Test editing file in non-allowed directory
     const response = await fileEditTool.processQuery(
       `update ${nonAllowedPath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
-    console.log('Tool results:', response.toolResults.join('\n'));
-    console.log('Response:', response.finalText.join('\n'));
-    console.log('Final status:', response.finalStatus);
+    // console.log('Tool results:', response.toolResults.join('\n'));
+    // console.log('Response:', response.finalText.join('\n'));
+    // console.log('Final status:', response.finalStatus);
+    // console.log('Tool call count:', response.toolCallCount);
 
     // Verify the file was not edited
     const editedContent = await fs.readFile(nonAllowedPath, 'utf-8');
@@ -86,15 +97,26 @@ describe('File Edit Tool with Claude', () => {
     // Define path for new file
     const newFilePath = path.join(testDir, '1', 'new-file.js');
 
+    fileEditTool = new FileEditTool(
+      [path.join(testDir, '1')],
+      model,
+      AI_PROVIDERS.ANTHROPIC,
+      process.env.ANTHROPIC_API_KEY || '',
+      [path.join(testDir, '1', 'edit-test.js')],
+    );
+
     // Test creating a new file
     const response = await fileEditTool.processQuery(
       `create new file ${newFilePath} with content: function greet(name) { return "Hello, " + name; }`,
     );
-    console.log('Tool results:', response.toolResults.join('\n'));
-    console.log('Response:', response.finalText.join('\n'));
-    console.log('Final status:', response.finalStatus);
+    // console.log('Tool results:', response.toolResults.join('\n'));
+    // console.log('Response:', response.finalText.join('\n'));
+    // console.log('Final status:', response.finalStatus);
+    // console.log('Tool call count:', response.toolCallCount);
     expect(response.finalText.join('\n')).toContain('Successfully created file');
     expect(response.finalStatus).toBe('success');
+    expect(response.toolCallCount).toBeGreaterThanOrEqual(1);
+    expect(response.toolCallCount).toBeLessThanOrEqual(2);
 
     // Verify the file was created with correct content
     const fileContent = await fs.readFile(newFilePath, 'utf-8');

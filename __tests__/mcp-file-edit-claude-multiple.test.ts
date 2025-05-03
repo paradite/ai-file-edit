@@ -22,15 +22,6 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
     await fs.rm(testDir, {recursive: true, force: true});
   });
 
-  beforeEach(() => {
-    fileEditTool = new FileEditTool(
-      [path.join(testDir, '1')],
-      model,
-      AI_PROVIDERS.ANTHROPIC,
-      process.env.ANTHROPIC_API_KEY || '',
-    );
-  });
-
   test('should edit multiple files in allowed directory', async () => {
     // Create test files with initial content
     const file1Path = path.join(testDir, '1', 'file1.js');
@@ -42,17 +33,28 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
       'function subtract(a, b) { return a - b; }\nconsole.log(subtract(5, 3));',
     );
 
+    fileEditTool = new FileEditTool(
+      [path.join(testDir, '1')],
+      model,
+      AI_PROVIDERS.ANTHROPIC,
+      process.env.ANTHROPIC_API_KEY || '',
+      [path.join(testDir, '1', 'file1.js'), path.join(testDir, '1', 'file2.js')],
+    );
+
     // Test editing multiple files in allowed directory
     const response = await fileEditTool.processQuery(
       `update both ${file1Path} and ${file2Path} to change the arithmetic operations to multiplication. 
        In ${file1Path}, change add to multiply and update the function calls.
        In ${file2Path}, change subtract to multiply and update the function calls.`,
     );
-    console.log('Tool results:', response.toolResults.join('\n'));
-    console.log('Response:', response.finalText.join('\n'));
-    console.log('Final status:', response.finalStatus);
+    // console.log('Tool results:', response.toolResults.join('\n'));
+    // console.log('Response:', response.finalText.join('\n'));
+    // console.log('Final status:', response.finalStatus);
+    // console.log('Tool call count:', response.toolCallCount);
     expect(response.finalText.join('\n')).toContain('Successfully updated file');
     expect(response.finalStatus).toBe('success');
+    expect(response.toolCallCount).toBeGreaterThanOrEqual(1);
+    expect(response.toolCallCount).toBeLessThanOrEqual(2);
 
     // Verify the files were edited correctly
     const file1Content = await fs.readFile(file1Path, 'utf-8');
