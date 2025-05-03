@@ -61,10 +61,11 @@ describe('MCP File Edit', () => {
     await mcpClient.connectToServer(serverScriptPath, [path.join(testDir, '1')]);
 
     // Test editing file in non-allowed directory
-    const response = await mcpClient.processQuery(
-      `update ${nonAllowedPath} to change add to multiply`,
-    );
-    expect(response).toContain('Error: Access denied');
-    expect(response).toContain('path outside allowed directories');
+    await mcpClient.processQuery(`update ${nonAllowedPath} to change add to multiply`);
+
+    // Verify the file was not edited
+    const editedContent = await fs.readFile(nonAllowedPath, 'utf-8');
+    expect(editedContent).toContain('function add(a, b)');
+    expect(editedContent).toContain('console.log(add(1, 2));');
   });
 });

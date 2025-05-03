@@ -15,7 +15,6 @@ import {zodToJsonSchema} from 'zod-to-json-schema';
 import {diffLines, createTwoFilesPatch} from 'diff';
 
 enum ToolName {
-  ReadFile = 'read_file',
   WriteFile = 'write_file',
   EditFile = 'edit_file',
 }
@@ -104,10 +103,6 @@ async function validatePath(requestedPath: string): Promise<string> {
 }
 
 // Schema definitions
-const ReadFileArgsSchema = z.object({
-  path: z.string(),
-});
-
 const WriteFileArgsSchema = z.object({
   path: z.string(),
   content: z.string(),
@@ -249,15 +244,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: ToolName.ReadFile,
-        description:
-          'Read the complete contents of a file from the file system. ' +
-          'Handles various text encodings and provides detailed error messages ' +
-          'if the file cannot be read. Use this tool when you need to examine ' +
-          'the contents of a single file. Only works within allowed directories.',
-        inputSchema: zodToJsonSchema(ReadFileArgsSchema) as ToolInput,
-      },
-      {
         name: ToolName.WriteFile,
         description:
           'Create a new file or completely overwrite an existing file with new content. ' +
@@ -282,18 +268,6 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     const {name, arguments: args} = request.params;
 
     switch (name as ToolName) {
-      case ToolName.ReadFile: {
-        const parsed = ReadFileArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
-        }
-        const validPath = await validatePath(parsed.data.path);
-        const content = await fs.readFile(validPath, 'utf-8');
-        return {
-          content: [{type: 'text', text: content}],
-        };
-      }
-
       case ToolName.WriteFile: {
         const parsed = WriteFileArgsSchema.safeParse(args);
         if (!parsed.success) {
