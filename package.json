@@ -5,6 +5,9 @@
   "scripts": {
     "test": "npm run build:all && jest",
     "test:watch": "npm run build:all && jest --watch",
+    "test:file": "npm run build:all && jest",
+    "test:openai": "npm run build:all && jest mcp-file-edit-openai.test.ts",
+    "test:claude": "npm run build:all && jest mcp-file-edit-claude.test.ts",
     "build": "tsc && chmod 755 build/main.js",
     "build:server": "cd servers/filesystem && npm run build",
     "build:all": "npm run build && npm run build:server"
@@ -22,7 +25,8 @@
   "description": "",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.1",
-    "@modelcontextprotocol/sdk": "^1.11.0"
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "openai": "^4.97.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
