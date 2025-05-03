@@ -103,8 +103,8 @@ async function validatePath(requestedPath: string): Promise<string> {
 
 // Schema definitions
 const EditOperation = z.object({
-  oldText: z.string().describe('Text to search for - must match exactly'),
-  newText: z.string().describe('Text to replace with'),
+  oldText: z.string().describe('Text to search for - must match exactly. Can be multiple lines.'),
+  newText: z.string().describe('Text to replace with. Can be multiple lines.'),
 });
 
 const EditFileArgsSchema = z.object({

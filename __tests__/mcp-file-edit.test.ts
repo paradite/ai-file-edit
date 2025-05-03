@@ -39,7 +39,7 @@ describe('MCP File Edit', () => {
 
     // Test editing file in allowed directory
     const response = await mcpClient.processQuery(
-      `update ${testFilePath} to change add to multiply. update function calls add(1,2) to multiply(1,2)`,
+      `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
     console.log('Response:', response);
     expect(response).toContain('Successfully updated file');
@@ -47,7 +47,12 @@ describe('MCP File Edit', () => {
     // Verify the file was edited correctly
     const editedContent = await fs.readFile(testFilePath, 'utf-8');
     expect(editedContent).toContain('function multiply(a, b)');
+    expect(editedContent).toContain('a * b');
     expect(editedContent).toContain('console.log(multiply(1, 2));');
+
+    expect(editedContent).not.toContain('function add(a, b)');
+    expect(editedContent).not.toContain('a + b');
+    expect(editedContent).not.toContain('console.log(add(1, 2));');
   });
 
   test('should deny access to non-allowed directory', async () => {
@@ -63,7 +68,7 @@ describe('MCP File Edit', () => {
 
     // Test editing file in non-allowed directory
     const response = await mcpClient.processQuery(
-      `update ${nonAllowedPath} to change add to multiply. update function calls add(1,2) to multiply(1,2)`,
+      `update ${nonAllowedPath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
     console.log('Response:', response);
 
