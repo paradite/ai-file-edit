@@ -1,7 +1,7 @@
 import {FileEditTool} from '../index';
 import fs from 'fs/promises';
 import path from 'path';
-import {ModelEnum} from 'llm-info';
+import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
 const model = ModelEnum['gpt-4.1'];
 
@@ -23,7 +23,12 @@ describe('File Edit Tool with OpenAI', () => {
   });
 
   beforeEach(() => {
-    fileEditTool = new FileEditTool([path.join(testDir, '1')]);
+    fileEditTool = new FileEditTool(
+      [path.join(testDir, '1')],
+      model,
+      AI_PROVIDERS.OPENAI,
+      process.env.OPENAI_API_KEY || '',
+    );
   });
 
   test('should allow editing files in allowed directory using OpenAI', async () => {
@@ -37,7 +42,6 @@ describe('File Edit Tool with OpenAI', () => {
     // Test editing file in allowed directory using OpenAI
     const response = await fileEditTool.processQuery(
       `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
-      model,
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));
@@ -67,7 +71,6 @@ describe('File Edit Tool with OpenAI', () => {
     // Test editing file in non-allowed directory using OpenAI
     const response = await fileEditTool.processQuery(
       `update ${nonAllowedPath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
-      model,
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));
@@ -86,7 +89,6 @@ describe('File Edit Tool with OpenAI', () => {
     // Test creating a new file using OpenAI
     const response = await fileEditTool.processQuery(
       `create new file ${newFilePath} with content: function greet(name) { return "Hello, " + name; }`,
-      model,
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));

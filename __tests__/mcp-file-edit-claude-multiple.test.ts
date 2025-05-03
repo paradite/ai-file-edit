@@ -1,7 +1,7 @@
 import {FileEditTool} from '../index';
 import fs from 'fs/promises';
 import path from 'path';
-import {ModelEnum} from 'llm-info';
+import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
 const model = ModelEnum['claude-3-7-sonnet-20250219'];
 
@@ -23,7 +23,12 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
   });
 
   beforeEach(() => {
-    fileEditTool = new FileEditTool([path.join(testDir, '1')]);
+    fileEditTool = new FileEditTool(
+      [path.join(testDir, '1')],
+      model,
+      AI_PROVIDERS.ANTHROPIC,
+      process.env.ANTHROPIC_API_KEY || '',
+    );
   });
 
   test('should edit multiple files in allowed directory', async () => {
@@ -42,7 +47,6 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
       `update both ${file1Path} and ${file2Path} to change the arithmetic operations to multiplication. 
        In ${file1Path}, change add to multiply and update the function calls.
        In ${file2Path}, change subtract to multiply and update the function calls.`,
-      model,
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));

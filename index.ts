@@ -4,25 +4,14 @@ import fs from 'fs/promises';
 import path from 'path';
 import {OpenAI} from 'openai';
 import {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
-import {ModelEnum, ModelInfoMap, AI_PROVIDERS} from 'llm-info';
+import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import {validatePath, applyFileEdits} from './utils/fileUtils.js';
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
 const MAX_TOOL_USE_ROUNDS = 3;
 
 type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
-
-if (!ANTHROPIC_API_KEY) {
-  throw new Error('ANTHROPIC_API_KEY is not set');
-}
-
-if (!OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY is not set');
-}
 
 const followupTemplate = (toolResults: string) => `Tool call returned the following result:
 
@@ -49,20 +38,34 @@ const EditFileArgsSchema = z.object({
 });
 
 export class FileEditTool {
-  private anthropic: Anthropic;
-  private openai: OpenAI;
+  private anthropic: Anthropic | null = null;
+  private openai: OpenAI | null = null;
   private allowedDirectories: string[] = [];
   private fileContents: Record<string, string> = {};
   private tools: Tool[] = [];
+  private modelName: ModelEnum;
+  private provider: AI_PROVIDER_TYPE;
 
-  constructor(allowedDirectories: string[] = []) {
+  constructor(
+    allowedDirectories: string[] = [],
+    modelName: ModelEnum,
+    provider: AI_PROVIDER_TYPE,
+    apiKey: string,
+  ) {
     this.allowedDirectories = allowedDirectories;
-    this.anthropic = new Anthropic({
-      apiKey: ANTHROPIC_API_KEY,
-    });
-    this.openai = new OpenAI({
-      apiKey: OPENAI_API_KEY,
-    });
+    this.modelName = modelName;
+    this.provider = provider;
+
+    if (provider === AI_PROVIDERS.ANTHROPIC) {
+      this.anthropic = new Anthropic({
+        apiKey,
+      });
+    } else if (provider === AI_PROVIDERS.OPENAI) {
+      this.openai = new OpenAI({
+        apiKey,
+      });
+    }
+
     const editFileSchema = zodToJsonSchema(EditFileArgsSchema) as {
       type: string;
       properties: Record<string, any>;
@@ -216,7 +219,7 @@ export class FileEditTool {
 
     let finalStatus: ToolCallStatus = initialStatus;
 
-    const response = await this.anthropic.messages.create({
+    const response = await this.anthropic?.messages.create({
       model: modelName,
       max_tokens: 1000,
       messages,
@@ -224,7 +227,7 @@ export class FileEditTool {
     });
 
     // Handle the response content
-    for (const content of response.content) {
+    for (const content of response?.content || []) {
       if (content.type === 'text') {
         finalText.push(content.text);
       } else if (content.type === 'tool_use') {
@@ -278,7 +281,7 @@ export class FileEditTool {
 
     const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
-    const response = await this.openai.chat.completions.create({
+    const response = await this.openai?.chat.completions.create({
       model: modelName,
       messages: openAIMessages,
       tools: this.tools.map(tool => ({
@@ -292,12 +295,12 @@ export class FileEditTool {
     });
 
     // Handle the response content
-    const message = response.choices[0].message;
-    if (message.content) {
+    const message = response?.choices[0].message;
+    if (message?.content) {
       finalText.push(message.content);
     }
 
-    if (message.tool_calls) {
+    if (message?.tool_calls) {
       for (const toolCall of message.tool_calls) {
         if (round < MAX_TOOL_USE_ROUNDS) {
           // If we get a tool use response and we haven't reached the round limit
@@ -343,7 +346,6 @@ export class FileEditTool {
 
   async processQuery(
     query: string,
-    modelName: ModelEnum,
   ): Promise<{finalText: string[]; toolResults: string[]; finalStatus: ToolCallStatus}> {
     let toolCallCount = 0;
     let finalStatus: ToolCallStatus = 'success';
@@ -362,14 +364,11 @@ export class FileEditTool {
       },
     ];
 
-    // Determine provider based on model name
-    const provider = ModelInfoMap[modelName].provider;
-
-    if (provider === AI_PROVIDERS.OPENAI) {
+    if (this.provider === AI_PROVIDERS.OPENAI) {
       const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
-      const response = await this.openai.chat.completions.create({
-        model: modelName,
+      const response = await this.openai?.chat.completions.create({
+        model: this.modelName,
         messages: openAIMessages,
         tools: this.tools.map(tool => ({
           type: 'function',
@@ -384,19 +383,19 @@ export class FileEditTool {
       const finalText = [];
       const toolResults = [];
 
-      const message = response.choices[0].message;
-      if (message.content) {
+      const message = response?.choices[0].message;
+      if (message?.content) {
         finalText.push(message.content);
       }
 
-      if (message.tool_calls) {
+      if (message?.tool_calls) {
         for (const toolCall of message.tool_calls) {
           const {
             finalText: toolFinalText,
             toolResults: newToolResults,
             finalStatus: toolFinalStatus,
           } = await this.handleOpenAIToolUse(
-            modelName,
+            this.modelName,
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments),
             messages,
@@ -413,9 +412,9 @@ export class FileEditTool {
       }
 
       return {finalText, toolResults, finalStatus};
-    } else if (provider === AI_PROVIDERS.ANTHROPIC) {
-      const response = await this.anthropic.messages.create({
-        model: modelName,
+    } else if (this.provider === AI_PROVIDERS.ANTHROPIC) {
+      const response = await this.anthropic?.messages.create({
+        model: this.modelName,
         max_tokens: 1000,
         messages,
         tools: this.tools,
@@ -424,7 +423,7 @@ export class FileEditTool {
       const finalText = [];
       const toolResults = [];
 
-      for (const content of response.content) {
+      for (const content of response?.content || []) {
         if (content.type === 'text') {
           finalText.push(content.text);
         } else if (content.type === 'tool_use') {
@@ -433,7 +432,7 @@ export class FileEditTool {
             toolResults: newToolResults,
             finalStatus: toolFinalStatus,
           } = await this.handleAnthropicToolUse(
-            modelName,
+            this.modelName,
             content.name,
             content.input as {[x: string]: unknown} | undefined,
             messages,
@@ -452,7 +451,7 @@ export class FileEditTool {
       return {finalText, toolResults, finalStatus};
     } else {
       return {
-        finalText: [`[Unsupported model: ${modelName}]`],
+        finalText: [`[Unsupported model: ${this.modelName}]`],
         toolResults: [],
         finalStatus: 'failure',
       };
