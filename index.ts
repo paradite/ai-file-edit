@@ -15,6 +15,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const MAX_TOOL_USE_ROUNDS = 3;
 
+type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
+
 // Use model enums from llm-info package
 const ANTHROPIC_MODEL = ModelEnum['claude-3-5-sonnet-20241022'];
 const OPENAI_MODEL = ModelEnum['gpt-4o'];
@@ -33,7 +35,7 @@ ${toolResults}
 
 Check if you need to perform any follow up actions via the tools.
 
-If so, call the appropriate tool. If not, just return "No follow up actions needed".
+If you need to perform follow up actions, call the appropriate tool. If not, respond with "No follow up actions needed".
 `;
 
 // Schema definitions
@@ -125,9 +127,10 @@ export class FileEditTool {
     toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
     round: number = 0,
-  ): Promise<{finalText: string[]; toolResults: string[]}> {
+  ): Promise<{finalText: string[]; toolResults: string[]; finalStatus: ToolCallStatus}> {
     const finalText = [];
     const toolResults = [];
+    let finalStatus: ToolCallStatus = 'success';
 
     finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
 
@@ -138,12 +141,14 @@ export class FileEditTool {
         return {
           finalText: [`[Invalid arguments for edit_file: ${parsed.error}]`],
           toolResults: [],
+          finalStatus: 'failure',
         };
       }
       if (parsed.data.content === undefined && parsed.data.edits === undefined) {
         return {
           finalText: [`[Either content or edits must be provided]`],
           toolResults: [],
+          finalStatus: 'failure',
         };
       }
       if (parsed.data.content !== undefined && parsed.data.edits !== undefined) {
@@ -152,6 +157,7 @@ export class FileEditTool {
             `[Cannot provide both content and edits - use content for complete file writes and edits for partial changes]`,
           ],
           toolResults: [],
+          finalStatus: 'failure',
         };
       }
       try {
@@ -161,12 +167,14 @@ export class FileEditTool {
         return {
           finalText: [`[Error applying edits: ${error}]`],
           toolResults: [],
+          finalStatus: 'failure',
         };
       }
     } else {
       return {
         finalText: [`[Unknown tool: ${toolName}]`],
         toolResults: [],
+        finalStatus: 'failure',
       };
     }
 
@@ -206,25 +214,30 @@ export class FileEditTool {
       } else if (content.type === 'tool_use') {
         if (round < MAX_TOOL_USE_ROUNDS) {
           // If we get a tool use response and we haven't reached the round limit
-          const {finalText: nextRoundFinalText, toolResults: nextRoundToolResults} =
-            await this.handleAnthropicToolUse(
-              content.name,
-              content.input as {[x: string]: unknown} | undefined,
-              messages,
-              round + 1,
-            );
+          const {
+            finalText: nextRoundFinalText,
+            toolResults: nextRoundToolResults,
+            finalStatus: nextRoundFinalStatus,
+          } = await this.handleAnthropicToolUse(
+            content.name,
+            content.input as {[x: string]: unknown} | undefined,
+            messages,
+            round + 1,
+          );
           finalText.push(...nextRoundFinalText);
           toolResults.push(...nextRoundToolResults);
+          finalStatus = nextRoundFinalStatus;
         } else {
           // If we get a tool use response but we've reached the round limit
           finalText.push(
             `[Maximum tool use rounds (${MAX_TOOL_USE_ROUNDS}) reached. Stopping further tool calls.]`,
           );
+          finalStatus = 'retry_limit_reached';
         }
       }
     }
 
-    return {finalText, toolResults};
+    return {finalText, toolResults, finalStatus};
   }
 
   private async handleOpenAIToolUse(
@@ -232,9 +245,10 @@ export class FileEditTool {
     toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
     round: number = 0,
-  ): Promise<{finalText: string[]; toolResults: string[]}> {
+  ): Promise<{finalText: string[]; toolResults: string[]; finalStatus: ToolCallStatus}> {
     const finalText = [];
     const toolResults = [];
+    let finalStatus: ToolCallStatus = 'success';
 
     finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
 
@@ -245,12 +259,14 @@ export class FileEditTool {
         return {
           finalText: [`[Invalid arguments for edit_file: ${parsed.error}]`],
           toolResults: [],
+          finalStatus: 'failure',
         };
       }
       if (parsed.data.content === undefined && parsed.data.edits === undefined) {
         return {
           finalText: [`[Either content or edits must be provided]`],
           toolResults: [],
+          finalStatus: 'failure',
         };
       }
       if (parsed.data.content !== undefined && parsed.data.edits !== undefined) {
@@ -259,6 +275,7 @@ export class FileEditTool {
             `[Cannot provide both content and edits - use content for complete file writes and edits for partial changes]`,
           ],
           toolResults: [],
+          finalStatus: 'failure',
         };
       }
       try {
@@ -268,12 +285,14 @@ export class FileEditTool {
         return {
           finalText: [`[Error applying edits: ${error}]`],
           toolResults: [],
+          finalStatus: 'failure',
         };
       }
     } else {
       return {
         finalText: [`[Unknown tool: ${toolName}]`],
         toolResults: [],
+        finalStatus: 'failure',
       };
     }
 
@@ -324,25 +343,30 @@ export class FileEditTool {
       for (const toolCall of message.tool_calls) {
         if (round < MAX_TOOL_USE_ROUNDS) {
           // If we get a tool use response and we haven't reached the round limit
-          const {finalText: nextRoundFinalText, toolResults: nextRoundToolResults} =
-            await this.handleOpenAIToolUse(
-              toolCall.function.name,
-              JSON.parse(toolCall.function.arguments),
-              messages,
-              round + 1,
-            );
+          const {
+            finalText: nextRoundFinalText,
+            toolResults: nextRoundToolResults,
+            finalStatus: nextRoundFinalStatus,
+          } = await this.handleOpenAIToolUse(
+            toolCall.function.name,
+            JSON.parse(toolCall.function.arguments),
+            messages,
+            round + 1,
+          );
           finalText.push(...nextRoundFinalText);
           toolResults.push(...nextRoundToolResults);
+          finalStatus = nextRoundFinalStatus;
         } else {
           // If we get a tool use response but we've reached the round limit
           finalText.push(
             `[Maximum tool use rounds (${MAX_TOOL_USE_ROUNDS}) reached. Stopping further tool calls.]`,
           );
+          finalStatus = 'retry_limit_reached';
         }
       }
     }
 
-    return {finalText, toolResults};
+    return {finalText, toolResults, finalStatus};
   }
 
   private convertAnthropicMessageToOpenAI(msg: MessageParam): ChatCompletionMessageParam {
@@ -361,7 +385,10 @@ export class FileEditTool {
   async processQuery(
     query: string,
     useOpenAI: boolean = false,
-  ): Promise<{finalText: string[]; toolResults: string[]}> {
+  ): Promise<{finalText: string[]; toolResults: string[]; finalStatus: ToolCallStatus}> {
+    let toolCallCount = 0;
+    let finalStatus: ToolCallStatus = 'success';
+
     // prepend the file contents to the query
     const queryWithFileContents = Object.entries(this.fileContents)
       .map(([file, content]) => `File \`${file}\`:\n\`\`\`\n${content}\`\`\``)
@@ -402,18 +429,27 @@ export class FileEditTool {
 
       if (message.tool_calls) {
         for (const toolCall of message.tool_calls) {
-          const {finalText: toolFinalText, toolResults: newToolResults} =
-            await this.handleOpenAIToolUse(
-              toolCall.function.name,
-              JSON.parse(toolCall.function.arguments),
-              messages,
-            );
+          const {
+            finalText: toolFinalText,
+            toolResults: newToolResults,
+            finalStatus: toolFinalStatus,
+          } = await this.handleOpenAIToolUse(
+            toolCall.function.name,
+            JSON.parse(toolCall.function.arguments),
+            messages,
+          );
           finalText.push(...toolFinalText);
           toolResults.push(...newToolResults);
+          finalStatus = toolFinalStatus;
+          toolCallCount++;
         }
       }
 
-      return {finalText, toolResults};
+      if (toolCallCount === 0) {
+        finalStatus = 'no_tool_calls';
+      }
+
+      return {finalText, toolResults, finalStatus};
     } else {
       const response = await this.anthropic.messages.create({
         model: ANTHROPIC_MODEL,
@@ -429,18 +465,27 @@ export class FileEditTool {
         if (content.type === 'text') {
           finalText.push(content.text);
         } else if (content.type === 'tool_use') {
-          const {finalText: toolFinalText, toolResults: newToolResults} =
-            await this.handleAnthropicToolUse(
-              content.name,
-              content.input as {[x: string]: unknown} | undefined,
-              messages,
-            );
+          const {
+            finalText: toolFinalText,
+            toolResults: newToolResults,
+            finalStatus: toolFinalStatus,
+          } = await this.handleAnthropicToolUse(
+            content.name,
+            content.input as {[x: string]: unknown} | undefined,
+            messages,
+          );
           finalText.push(...toolFinalText);
           toolResults.push(...newToolResults);
+          finalStatus = toolFinalStatus;
+          toolCallCount++;
         }
       }
 
-      return {finalText, toolResults};
+      if (toolCallCount === 0) {
+        finalStatus = 'no_tool_calls';
+      }
+
+      return {finalText, toolResults, finalStatus};
     }
   }
 
@@ -463,6 +508,7 @@ export class FileEditTool {
         const response = await this.processQuery(message, useOpenAI);
         console.log('\nResponse:\n' + response.finalText.join('\n'));
         console.log('\nTool results:\n' + JSON.stringify(response.toolResults, null, 2));
+        console.log('\nFinal status:\n' + response.finalStatus);
       }
     } finally {
       rl.close();

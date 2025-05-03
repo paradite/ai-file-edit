@@ -35,7 +35,9 @@ describe('File Edit Tool with Claude', () => {
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));
+    console.log('Final status:', response.finalStatus);
     expect(response.finalText.join('\n')).toContain('Successfully updated file');
+    expect(response.finalStatus).toBe('success');
 
     // Verify the file was edited correctly
     const editedContent = await fs.readFile(testFilePath, 'utf-8');
@@ -62,6 +64,7 @@ describe('File Edit Tool with Claude', () => {
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));
+    console.log('Final status:', response.finalStatus);
 
     // Verify the file was not edited
     const editedContent = await fs.readFile(nonAllowedPath, 'utf-8');
@@ -79,7 +82,9 @@ describe('File Edit Tool with Claude', () => {
     );
     console.log('Tool results:', response.toolResults.join('\n'));
     console.log('Response:', response.finalText.join('\n'));
+    console.log('Final status:', response.finalStatus);
     expect(response.finalText.join('\n')).toContain('Successfully created file');
+    expect(response.finalStatus).toBe('success');
 
     // Verify the file was created with correct content
     const fileContent = await fs.readFile(newFilePath, 'utf-8');
