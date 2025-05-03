@@ -2,7 +2,7 @@ import {MCPClient} from './index.js';
 
 async function main() {
   if (process.argv.length < 3) {
-    console.log('Usage: node main.ts <path_to_server_script> [--openai] [args]');
+    console.log('Usage: node main.ts [--openai] [args]');
     return;
   }
 
@@ -16,14 +16,13 @@ async function main() {
     const args = process.argv.slice(2).filter(arg => arg !== '--openai');
 
     if (args.length < 1) {
-      console.log('Usage: node main.ts <path_to_server_script> [--openai] [args]');
+      console.log('Usage: node main.ts [--openai] [args]');
       return;
     }
 
-    const serverScriptPath = args[0];
     const allowedDirectories = args.slice(1);
 
-    await mcpClient.connectToServer(serverScriptPath, allowedDirectories);
+    await mcpClient.connectToServer(allowedDirectories);
     await mcpClient.chatLoop(useOpenAI);
   } finally {
     await mcpClient.cleanup();

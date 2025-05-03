@@ -5,7 +5,6 @@ import path from 'path';
 describe('MCP File Edit with OpenAI', () => {
   let mcpClient: MCPClient;
   const testDir = path.join(process.cwd(), 'sample');
-  const serverScriptPath = './servers/filesystem/dist/index.js';
 
   beforeAll(async () => {
     // Create test directories
@@ -35,7 +34,7 @@ describe('MCP File Edit with OpenAI', () => {
     );
 
     // Connect to server with only test directory 1 allowed
-    await mcpClient.connectToServer(serverScriptPath, [path.join(testDir, '1')]);
+    await mcpClient.connectToServer([path.join(testDir, '1')]);
 
     // Test editing file in allowed directory using OpenAI
     const response = await mcpClient.processQuery(
@@ -66,7 +65,7 @@ describe('MCP File Edit with OpenAI', () => {
     );
 
     // Connect to server with only test directory 1 allowed
-    await mcpClient.connectToServer(serverScriptPath, [path.join(testDir, '1')]);
+    await mcpClient.connectToServer([path.join(testDir, '1')]);
 
     // Test editing file in non-allowed directory using OpenAI
     const response = await mcpClient.processQuery(
@@ -84,7 +83,7 @@ describe('MCP File Edit with OpenAI', () => {
 
   test('should create new file in allowed directory using OpenAI', async () => {
     // Connect to server with test directory 1 allowed
-    await mcpClient.connectToServer(serverScriptPath, [path.join(testDir, '1')]);
+    await mcpClient.connectToServer([path.join(testDir, '1')]);
 
     // Define path for new file
     const newFilePath = path.join(testDir, '1', 'new-file-openai.js');

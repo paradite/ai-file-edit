@@ -1,13 +1,14 @@
 import {Anthropic} from '@anthropic-ai/sdk';
 import {MessageParam, Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
-import {Client} from '@modelcontextprotocol/sdk/client/index.js';
-import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import readline from 'readline/promises';
 import fs from 'fs/promises';
 import path from 'path';
 import {OpenAI} from 'openai';
 import {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
 import {ModelEnum} from 'llm-info';
+import {z} from 'zod';
+import {zodToJsonSchema} from 'zod-to-json-schema';
+import {validatePath, applyFileEdits} from './utils/fileUtils.js';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -33,14 +34,34 @@ Check if you need to perform any follow up actions via the tools.
 If so, call the appropriate tool. If not, just return "No follow up actions needed".
 `;
 
+// Schema definitions
+const EditOperation = z.object({
+  oldText: z.string().describe('Text to search for - must match exactly. Can be multiple lines.'),
+  newText: z.string().describe('Text to replace with. Can be multiple lines.'),
+});
+
+const EditFileArgsSchema = z.object({
+  path: z.string(),
+  content: z
+    .string()
+    .optional()
+    .describe('Complete file content to write (for new files or complete overwrites)'),
+  edits: z.array(EditOperation).optional().describe('List of edits to apply (for partial edits)'),
+  dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format'),
+});
+
+const ToolInputSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  inputSchema: z.any(),
+});
+
 export class MCPClient {
-  private mcp: Client;
   private anthropic: Anthropic;
   private openai: OpenAI;
-  private transport: StdioClientTransport | null = null;
-  private tools: Tool[] = [];
   private allowedDirectories: string[] = [];
   private fileContents: Record<string, string> = {};
+  private tools: Tool[] = [];
 
   constructor() {
     this.anthropic = new Anthropic({
@@ -49,10 +70,31 @@ export class MCPClient {
     this.openai = new OpenAI({
       apiKey: OPENAI_API_KEY,
     });
-    this.mcp = new Client({name: 'mcp-client-cli', version: '1.0.0'});
+    const editFileSchema = zodToJsonSchema(EditFileArgsSchema) as {
+      type: string;
+      properties: Record<string, any>;
+      required: string[];
+    };
+    this.tools = [
+      {
+        name: 'edit_file',
+        description:
+          'Create a new file, overwrite an existing file, or make selective edits to a file. ' +
+          'For new files or complete overwrites, use the content parameter. ' +
+          'For partial edits, use the edits parameter to specify text replacements. ' +
+          'Note: content and edits parameters are mutually exclusive - use one or the other, not both. ' +
+          'Returns a git-style diff showing the changes made. ' +
+          'Only works within allowed directories.',
+        input_schema: {
+          type: 'object' as const,
+          properties: editFileSchema.properties,
+          required: editFileSchema.required,
+        },
+      },
+    ];
   }
 
-  async connectToServer(serverScriptPath: string, allowedDirectories: string[] = []) {
+  async connectToServer(allowedDirectories: string[] = []) {
     this.allowedDirectories = allowedDirectories;
 
     // read all files in allowedDirectories
@@ -64,43 +106,13 @@ export class MCPClient {
       }
     }
 
-    try {
-      const isJs = serverScriptPath.endsWith('.js');
-      const isPy = serverScriptPath.endsWith('.py');
-      if (!isJs && !isPy) {
-        throw new Error('Server script must be a .js or .py file');
-      }
-      const command = isPy
-        ? process.platform === 'win32'
-          ? 'python'
-          : 'python3'
-        : process.execPath;
-
-      this.transport = new StdioClientTransport({
-        command,
-        args: [serverScriptPath, ...this.allowedDirectories],
-      });
-      this.mcp.connect(this.transport);
-
-      const toolsResult = await this.mcp.listTools();
-      this.tools = toolsResult.tools.map(tool => {
-        return {
-          name: tool.name,
-          description: tool.description,
-          input_schema: tool.inputSchema,
-        };
-      });
-      console.log(
-        'Connected to server with tools:',
-        this.tools.map(({name}) => name),
-      );
-    } catch (e) {
-      console.log('Failed to connect to MCP server: ', e);
-      throw e;
-    }
+    console.log(
+      'Connected with tools:',
+      this.tools.map(({name}) => name),
+    );
   }
 
-  private async handleToolUse(
+  private async handleAnthropicToolUse(
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
@@ -110,17 +122,57 @@ export class MCPClient {
     const toolResults = [];
 
     finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
-    const result = await this.mcp.callTool({
-      name: toolName,
-      arguments: toolArgs,
-    });
-    const resultContent = result.content as {type: 'text'; text: string}[];
-    toolResults.push(resultContent[0].text);
-    finalText.push(`[Tool ${toolName} returned: ${JSON.stringify(result)}]`);
+
+    let result: string;
+    if (toolName === 'edit_file') {
+      const parsed = EditFileArgsSchema.safeParse(toolArgs);
+      if (!parsed.success) {
+        return {
+          finalText: [`[Invalid arguments for edit_file: ${parsed.error}]`],
+          toolResults: [],
+        };
+      }
+      if (parsed.data.content === undefined && parsed.data.edits === undefined) {
+        return {
+          finalText: [`[Either content or edits must be provided]`],
+          toolResults: [],
+        };
+      }
+      if (parsed.data.content !== undefined && parsed.data.edits !== undefined) {
+        return {
+          finalText: [
+            `[Cannot provide both content and edits - use content for complete file writes and edits for partial changes]`,
+          ],
+          toolResults: [],
+        };
+      }
+      try {
+        const validPath = await validatePath(parsed.data.path, this.allowedDirectories);
+        result = await applyFileEdits(
+          validPath,
+          parsed.data.edits,
+          parsed.data.content,
+          parsed.data.dryRun,
+        );
+      } catch (error) {
+        return {
+          finalText: [`[Error applying edits: ${error}]`],
+          toolResults: [],
+        };
+      }
+    } else {
+      return {
+        finalText: [`[Unknown tool: ${toolName}]`],
+        toolResults: [],
+      };
+    }
+
+    toolResults.push(result);
+    finalText.push(`[Tool ${toolName} returned: ${result}]`);
 
     const followup = {
       role: 'user',
-      content: followupTemplate(resultContent[0].text),
+      content: followupTemplate(result),
     } as MessageParam;
 
     messages.push(followup);
@@ -142,7 +194,7 @@ export class MCPClient {
         if (round < 2) {
           // If we get a tool use response and we haven't reached the round limit
           const {finalText: nextRoundFinalText, toolResults: nextRoundToolResults} =
-            await this.handleToolUse(
+            await this.handleAnthropicToolUse(
               content.name,
               content.input as {[x: string]: unknown} | undefined,
               messages,
@@ -183,17 +235,57 @@ export class MCPClient {
     const toolResults = [];
 
     finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
-    const result = await this.mcp.callTool({
-      name: toolName,
-      arguments: toolArgs,
-    });
-    const resultContent = result.content as {type: 'text'; text: string}[];
-    toolResults.push(resultContent[0].text);
-    finalText.push(`[Tool ${toolName} returned: ${JSON.stringify(result)}]`);
+
+    let result: string;
+    if (toolName === 'edit_file') {
+      const parsed = EditFileArgsSchema.safeParse(toolArgs);
+      if (!parsed.success) {
+        return {
+          finalText: [`[Invalid arguments for edit_file: ${parsed.error}]`],
+          toolResults: [],
+        };
+      }
+      if (parsed.data.content === undefined && parsed.data.edits === undefined) {
+        return {
+          finalText: [`[Either content or edits must be provided]`],
+          toolResults: [],
+        };
+      }
+      if (parsed.data.content !== undefined && parsed.data.edits !== undefined) {
+        return {
+          finalText: [
+            `[Cannot provide both content and edits - use content for complete file writes and edits for partial changes]`,
+          ],
+          toolResults: [],
+        };
+      }
+      try {
+        const validPath = await validatePath(parsed.data.path, this.allowedDirectories);
+        result = await applyFileEdits(
+          validPath,
+          parsed.data.edits,
+          parsed.data.content,
+          parsed.data.dryRun,
+        );
+      } catch (error) {
+        return {
+          finalText: [`[Error applying edits: ${error}]`],
+          toolResults: [],
+        };
+      }
+    } else {
+      return {
+        finalText: [`[Unknown tool: ${toolName}]`],
+        toolResults: [],
+      };
+    }
+
+    toolResults.push(result);
+    finalText.push(`[Tool ${toolName} returned: ${result}]`);
 
     const followup = {
       role: 'user',
-      content: followupTemplate(resultContent[0].text),
+      content: followupTemplate(result),
     } as MessageParam;
 
     messages.push(followup);
@@ -315,11 +407,12 @@ export class MCPClient {
         if (content.type === 'text') {
           finalText.push(content.text);
         } else if (content.type === 'tool_use') {
-          const {finalText: toolFinalText, toolResults: newToolResults} = await this.handleToolUse(
-            content.name,
-            content.input as {[x: string]: unknown} | undefined,
-            messages,
-          );
+          const {finalText: toolFinalText, toolResults: newToolResults} =
+            await this.handleAnthropicToolUse(
+              content.name,
+              content.input as {[x: string]: unknown} | undefined,
+              messages,
+            );
           finalText.push(...toolFinalText);
           toolResults.push(...newToolResults);
         }
@@ -355,6 +448,6 @@ export class MCPClient {
   }
 
   async cleanup() {
-    await this.mcp.close();
+    // No need to close any connections as the tools are now handled locally
   }
 }

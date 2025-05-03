@@ -5,7 +5,6 @@ import path from 'path';
 describe('MCP File Edit', () => {
   let mcpClient: MCPClient;
   const testDir = path.join(process.cwd(), 'sample');
-  const serverScriptPath = './servers/filesystem/dist/index.js';
 
   beforeAll(async () => {
     // Create test directories
@@ -35,7 +34,7 @@ describe('MCP File Edit', () => {
     );
 
     // Connect to server with only test directory 1 allowed
-    await mcpClient.connectToServer(serverScriptPath, [path.join(testDir, '1')]);
+    await mcpClient.connectToServer([path.join(testDir, '1')]);
 
     // Test editing file in allowed directory
     const response = await mcpClient.processQuery(
@@ -65,7 +64,7 @@ describe('MCP File Edit', () => {
     );
 
     // Connect to server with only test directory 1 allowed
-    await mcpClient.connectToServer(serverScriptPath, [path.join(testDir, '1')]);
+    await mcpClient.connectToServer([path.join(testDir, '1')]);
 
     // Test editing file in non-allowed directory
     const response = await mcpClient.processQuery(
@@ -82,7 +81,7 @@ describe('MCP File Edit', () => {
 
   test('should create new file in allowed directory', async () => {
     // Connect to server with test directory 1 allowed
-    await mcpClient.connectToServer(serverScriptPath, [path.join(testDir, '1')]);
+    await mcpClient.connectToServer([path.join(testDir, '1')]);
 
     // Define path for new file
     const newFilePath = path.join(testDir, '1', 'new-file.js');
