@@ -41,8 +41,9 @@ describe('MCP File Edit', () => {
     const response = await mcpClient.processQuery(
       `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
-    console.log('Response:', response);
-    expect(response).toContain('Successfully updated file');
+    console.log('Tool results:', response.toolResults);
+    console.log('Response:', response.finalText);
+    expect(response.finalText.join('\n')).toContain('Successfully updated file');
 
     // Verify the file was edited correctly
     const editedContent = await fs.readFile(testFilePath, 'utf-8');
@@ -70,7 +71,8 @@ describe('MCP File Edit', () => {
     const response = await mcpClient.processQuery(
       `update ${nonAllowedPath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
     );
-    console.log('Response:', response);
+    console.log('Tool results:', response.toolResults);
+    console.log('Response:', response.finalText);
 
     // Verify the file was not edited
     const editedContent = await fs.readFile(nonAllowedPath, 'utf-8');
@@ -89,8 +91,9 @@ describe('MCP File Edit', () => {
     const response = await mcpClient.processQuery(
       `create new file ${newFilePath} with content: function greet(name) { return "Hello, " + name; }`,
     );
-    console.log('Response:', response);
-    expect(response).toContain('Successfully created file');
+    console.log('Tool results:', response.toolResults);
+    console.log('Response:', response.finalText);
+    expect(response.finalText.join('\n')).toContain('Successfully created file');
 
     // Verify the file was created with correct content
     const fileContent = await fs.readFile(newFilePath, 'utf-8');

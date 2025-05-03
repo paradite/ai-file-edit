@@ -11,6 +11,15 @@ if (!ANTHROPIC_API_KEY) {
   throw new Error('ANTHROPIC_API_KEY is not set');
 }
 
+const followupTemplate = (toolResults: string) => `Tool call returned the following result:
+
+${toolResults}
+
+Check if you need to perform any follow up actions via the tools.
+
+If so, call the appropriate tool. If not, just return "No follow up actions needed".
+`;
+
 export class MCPClient {
   private mcp: Client;
   private anthropic: Anthropic;
@@ -74,7 +83,67 @@ export class MCPClient {
     }
   }
 
-  async processQuery(query: string) {
+  private async handleToolUse(
+    toolName: string,
+    toolArgs: {[x: string]: unknown} | undefined,
+    messages: MessageParam[],
+    round: number = 1,
+  ): Promise<{finalText: string[]; toolResults: string[]}> {
+    const finalText = [];
+    const toolResults = [];
+
+    finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
+    const result = await this.mcp.callTool({
+      name: toolName,
+      arguments: toolArgs,
+    });
+    const resultContent = result.content as {type: 'text'; text: string}[];
+    toolResults.push(resultContent[0].text);
+    finalText.push(`[Tool ${toolName} returned: ${JSON.stringify(result)}]`);
+
+    const followup = {
+      role: 'user',
+      content: followupTemplate(resultContent[0].text),
+    } as MessageParam;
+
+    messages.push(followup);
+
+    finalText.push(`[Follow up: ${followup.content}]`);
+
+    const response = await this.anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1000,
+      messages,
+      tools: this.tools,
+    });
+
+    // Handle the response content
+    for (const content of response.content) {
+      if (content.type === 'text') {
+        finalText.push(content.text);
+      } else if (content.type === 'tool_use') {
+        if (round < 2) {
+          // If we get a tool use response and we haven't reached the round limit
+          const {finalText: nextRoundFinalText, toolResults: nextRoundToolResults} =
+            await this.handleToolUse(
+              content.name,
+              content.input as {[x: string]: unknown} | undefined,
+              messages,
+              round + 1,
+            );
+          finalText.push(...nextRoundFinalText);
+          toolResults.push(...nextRoundToolResults);
+        } else {
+          // If we get a tool use response but we've reached the round limit
+          finalText.push('[Maximum tool use rounds (2) reached. Stopping further tool calls.]');
+        }
+      }
+    }
+
+    return {finalText, toolResults};
+  }
+
+  async processQuery(query: string): Promise<{finalText: string[]; toolResults: unknown[]}> {
     // prepend the file contents to the query
     const queryWithFileContents = Object.entries(this.fileContents)
       .map(([file, content]) => `[File ${file}]:\n${content}`)
@@ -103,33 +172,17 @@ export class MCPClient {
       if (content.type === 'text') {
         finalText.push(content.text);
       } else if (content.type === 'tool_use') {
-        const toolName = content.name;
-        const toolArgs = content.input as {[x: string]: unknown} | undefined;
-
-        finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
-        const result = await this.mcp.callTool({
-          name: toolName,
-          arguments: toolArgs,
-        });
-        toolResults.push(result);
-        finalText.push(`[Tool ${toolName} returned: ${JSON.stringify(result)}]`);
-
-        messages.push({
-          role: 'user',
-          content: result.content as string,
-        });
-
-        const response = await this.anthropic.messages.create({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 1000,
+        const {finalText: toolFinalText, toolResults: newToolResults} = await this.handleToolUse(
+          content.name,
+          content.input as {[x: string]: unknown} | undefined,
           messages,
-        });
-
-        finalText.push(response.content[0].type === 'text' ? response.content[0].text : '');
+        );
+        finalText.push(...toolFinalText);
+        toolResults.push(...newToolResults);
       }
     }
 
-    return finalText.join('\n');
+    return {finalText, toolResults};
   }
 
   async chatLoop() {
@@ -148,7 +201,8 @@ export class MCPClient {
           break;
         }
         const response = await this.processQuery(message);
-        console.log('\n' + response);
+        console.log('\nResponse:\n' + response.finalText.join('\n'));
+        console.log('\nTool results:\n' + JSON.stringify(response.toolResults, null, 2));
       }
     } finally {
       rl.close();
