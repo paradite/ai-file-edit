@@ -221,7 +221,7 @@ async function applyFileEdits(
     }
 
     if (!matchFound) {
-      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
+      return `Error: Could not find exact match for edit:\n${edit.oldText}`;
     }
   }
 
@@ -239,7 +239,9 @@ async function applyFileEdits(
     await fs.writeFile(filePath, modifiedContent, 'utf-8');
   }
 
-  return formattedDiff;
+  const response = `Successfully updated file ${filePath} with diff:\n${formattedDiff}`;
+
+  return response;
 }
 
 // Tool handlers

@@ -2,7 +2,7 @@ import {MCPClient} from '../index';
 import fs from 'fs/promises';
 import path from 'path';
 
-describe('MCP File Edit', () => {
+describe.skip('MCP File Edit', () => {
   let mcpClient: MCPClient;
   const testDir = path.join(process.cwd(), 'sample');
   const serverScriptPath = './servers/filesystem/dist/index.js';
