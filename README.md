@@ -2,12 +2,14 @@
 
 [![npm](https://img.shields.io/npm/v/ai-file-edit)](https://www.npmjs.com/package/ai-file-edit)
 
-A library for editing files using AI models (Claude and GPT). This library allows you to make file edits using natural language instructions.
+A library for editing files using AI models (Claude and OpenAI), developed for [16x Prompt](https://prompt.16x.engineer/).
+
+This library allows you to make file edits using natural language instructions.
 
 ## Features
 
 - Edit files using natural language instructions
-- Support for both Claude and GPT models
+- Support for both Claude and OpenAI models
 - Multiple file editing in a single operation
 - Safe file operations with directory restrictions
 - Automatic function name and call site updates
