@@ -8,21 +8,28 @@ This library allows you to make file edits using natural language instructions.
 
 ## Features
 
+File Operations
+
 - Edit files using natural language
 - Create new files
 - Overwrite existing files
 - Make selective edits to files
+- Support for multiple file edits in a single operation
+
+AI Integration
+
+- Support for both OpenAI and Anthropic models
+- Support for multiple tool use rounds
+
+Version Control & Safety
+
 - Generate diffs for all changes
 - Generate reverse diffs for reverting changes
-- Support for both OpenAI and Anthropic models
-- Secure file access with allowed directories
-- Automatic file content refresh
-- Support for multiple tool use rounds
-- Support for multiple AI providers (Anthropic, OpenAI)
-- Automatic file content refresh after edits
-- Git-style diffs for tracking changes
-- Support for multiple file edits in a single operation
 - Ability to revert changes using reverse diffs
+
+Security
+
+- Secure file access with allowed directories
 
 ## Installation
 
