@@ -2,7 +2,7 @@ import {FileEditTool} from '../index';
 import fs from 'fs/promises';
 import path from 'path';
 import {ModelEnum, AI_PROVIDERS} from 'llm-info';
-import {parsePatch, applyPatch} from 'diff';
+import {applyReversePatch} from '../utils/fileUtils';
 
 const model = ModelEnum['claude-3-7-sonnet-20250219'];
 
@@ -163,15 +163,10 @@ describe('Diff Output Tests', () => {
       'function multiply(a, b) { return a * b; }\nconsole.log(multiply(1, 2));',
     );
 
-    // Parse and apply the reverse diff directly using the diff package
-    const patches = parsePatch(reverseDiff);
-    const revertedContent = applyPatch(modifiedContent, patches[0]);
-    if (typeof revertedContent !== 'string') {
-      throw new Error('Failed to apply patch');
-    }
-
-    // Write the reverted content back to the file
-    await fs.writeFile(testFilePath, revertedContent, 'utf-8');
+    // Apply the reverse patch using the new function
+    const result = await applyReversePatch(testFilePath, reverseDiff);
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
 
     // Verify the file was reverted to initialContent
     const finalContent = await fs.readFile(testFilePath, 'utf-8');

@@ -109,21 +109,24 @@ The reverse diff is returned in the `reverseDiff` field of the response. It show
 
 #### Reverting Changes
 
-You can use the reverse diff to revert changes using the `diff` package:
+You can use the reverse diff to revert changes using the `applyReversePatch` function:
 
 ```typescript
-import {parsePatch, applyPatch} from 'diff';
+import {applyReversePatch} from 'ai-file-edit';
 
-// Get the current content of the file
-const currentContent = await fs.readFile(filePath, 'utf-8');
-
-// Parse and apply the reverse diff
-const patches = parsePatch(reverseDiff);
-const revertedContent = applyPatch(currentContent, patches[0]);
-if (typeof revertedContent === 'string') {
-  await fs.writeFile(filePath, revertedContent, 'utf-8');
+// Apply the reverse patch to revert changes
+const result = await applyReversePatch(filePath, reverseDiff);
+if (result.success) {
+  console.log('Changes reverted successfully');
+} else {
+  console.error('Failed to revert changes:', result.error);
 }
 ```
+
+The `applyReversePatch` function returns a promise that resolves to an object with:
+
+- `success`: boolean indicating whether the operation was successful
+- `error`: optional string containing error message if the operation failed
 
 ### File Context
 

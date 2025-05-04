@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import {createTwoFilesPatch, parsePatch, reversePatch, formatPatch} from 'diff';
+import {createTwoFilesPatch, parsePatch, reversePatch, formatPatch, applyPatch} from 'diff';
 
 // Normalize all paths consistently
 export function normalizePath(p: string): string {
@@ -230,4 +230,47 @@ export async function applyFileEdits(
   }
 
   return {response, rawDiff, fileExists, newFileCreated, validEdits, reverseDiff};
+}
+
+export async function applyReversePatch(
+  filePath: string,
+  reverseDiff: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    // Read the current content of the file
+    const currentContent = await fs.readFile(filePath, 'utf-8');
+
+    // Parse the reverse diff
+    const patches = parsePatch(reverseDiff);
+    if (!patches || patches.length === 0) {
+      return {
+        success: false,
+        error: 'Invalid reverse diff format',
+      };
+    }
+
+    // Apply the reverse patch
+    const revertedContent = applyPatch(currentContent, patches[0]);
+    if (typeof revertedContent !== 'string') {
+      return {
+        success: false,
+        error: 'Failed to apply reverse patch',
+      };
+    }
+
+    // Write the reverted content back to the file
+    await fs.writeFile(filePath, revertedContent, 'utf-8');
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    };
+  }
 }

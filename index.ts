@@ -6,7 +6,7 @@ import {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
 import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
-import {validatePath, applyFileEdits} from './utils/fileUtils.js';
+import {validatePath, applyFileEdits, applyReversePatch} from './utils/fileUtils.js';
 
 export type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
 
@@ -555,3 +555,5 @@ export class FileEditTool {
     }
   }
 }
+
+export {applyReversePatch};
