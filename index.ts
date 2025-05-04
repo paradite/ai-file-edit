@@ -61,10 +61,12 @@ export class FileEditTool {
     if (provider === AI_PROVIDERS.ANTHROPIC) {
       this.anthropic = new Anthropic({
         apiKey,
+        dangerouslyAllowBrowser: true,
       });
     } else if (provider === AI_PROVIDERS.OPENAI) {
       this.openai = new OpenAI({
         apiKey,
+        dangerouslyAllowBrowser: true,
       });
     }
 
