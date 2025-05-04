@@ -18,6 +18,11 @@ This library allows you to make file edits using natural language instructions.
 - Secure file access with allowed directories
 - Automatic file content refresh
 - Support for multiple tool use rounds
+- Support for multiple AI providers (Anthropic, OpenAI)
+- Automatic file content refresh after edits
+- Git-style diffs for tracking changes
+- Support for multiple file edits in a single operation
+- Ability to revert changes using reverse diffs
 
 ## Installation
 
@@ -169,8 +174,27 @@ The `processQuery` method returns an object with the following structure:
   toolResults: string[];    // Array of results from tool operations
   finalStatus: 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
   toolCallCount: number;    // Number of tool calls made
-  rawDiff?: string;         // Forward diff showing changes made
-  reverseDiff?: string;     // Reverse diff for reverting changes
+  rawDiff?: Record<string, string>;    // Forward diffs for each file, keyed by file path
+  reverseDiff?: Record<string, string>; // Reverse diffs for each file, keyed by file path
+}
+```
+
+Example response with diffs:
+
+```ts
+{
+  finalText: ["Successfully updated files"],
+  toolResults: ["File updated successfully"],
+  finalStatus: "success",
+  toolCallCount: 1,
+  rawDiff: {
+    "/path/to/file1.js": "Index: /path/to/file1.js\n...",
+    "/path/to/file2.js": "Index: /path/to/file2.js\n..."
+  },
+  reverseDiff: {
+    "/path/to/file1.js": "Index: /path/to/file1.js\n...",
+    "/path/to/file2.js": "Index: /path/to/file2.js\n..."
+  }
 }
 ```
 
@@ -259,3 +283,30 @@ The tool enforces security by:
 ## License
 
 MIT
+
+## Diffs
+
+The tool provides both raw and reverse diffs in a git-style format. The diffs are returned as a record where:
+
+- The key is the file path
+- The value is the diff content
+
+Example diff format:
+
+```diff
+Index: /path/to/file.js
+===================================================================
+--- /path/to/file.js original
++++ /path/to/file.js modified
+@@ -1,2 +1,2 @@
+-function add(a, b) { return a + b; }
+-console.log(add(1, 2));
++function multiply(a, b) { return a * b; }
++console.log(multiply(1, 2));
+```
+
+The raw diff shows the changes made to the file, while the reverse diff shows how to revert those changes. This allows you to:
+
+1. Track what changes were made to each file
+2. Revert changes if needed using the reverse diff
+3. Reapply changes using the raw diff
