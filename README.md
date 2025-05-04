@@ -98,6 +98,11 @@ The `processQuery` method returns an object with the following structure:
 }
 ```
 
+## Limitations
+
+- Cannot delete files
+- Cannot edit too many files at once (> 3 files)
+
 ## Security Considerations
 
 - The library only allows file operations within specified allowed directories

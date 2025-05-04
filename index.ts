@@ -6,7 +6,7 @@ import {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
 import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
-import {validatePath, applyFileEdits} from './utils/fileUtils.js';
+import {validatePath, applyFileEdits, createReverseUnifiedDiff} from './utils/fileUtils.js';
 
 const MAX_TOOL_USE_ROUNDS = 3;
 
@@ -111,12 +111,14 @@ export class FileEditTool {
     toolResults: string[];
     finalStatus: ToolCallStatus;
     rawDiff?: string;
+    reverseDiff?: string;
     newFileCreated: boolean;
   }> {
     const finalText = [];
     const toolResults = [];
     let finalStatus: ToolCallStatus = 'success';
     let rawDiff: string | undefined;
+    let reverseDiff: string | undefined;
     let newFileCreated: boolean = false;
 
     finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
@@ -157,10 +159,12 @@ export class FileEditTool {
           rawDiff: newRawDiff,
           newFileCreated: resultNewFileCreated,
           validEdits,
+          reverseDiff: newReverseDiff,
         } = await applyFileEdits(validPath, parsed.data.edits, parsed.data.content);
         result = response;
         if (validEdits) {
           rawDiff = newRawDiff;
+          reverseDiff = newReverseDiff;
         }
         newFileCreated = resultNewFileCreated;
       } catch (error) {
@@ -200,7 +204,7 @@ export class FileEditTool {
       } as MessageParam;
       messages.push(followup);
       finalText.push(`[Follow up: ${followup.content}]`);
-      return {finalText, toolResults, finalStatus, rawDiff, newFileCreated};
+      return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
     } else {
       const followup = {
         role: 'user',
@@ -210,7 +214,7 @@ export class FileEditTool {
       } as MessageParam;
       messages.push(followup);
       finalText.push(`[Follow up: ${followup.content}]`);
-      return {finalText, toolResults, finalStatus, rawDiff, newFileCreated};
+      return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
     }
   }
 
@@ -225,20 +229,29 @@ export class FileEditTool {
     toolResults: string[];
     finalStatus: ToolCallStatus;
     rawDiff?: string;
+    reverseDiff?: string;
   }> {
     const {
       finalText,
       toolResults,
       finalStatus: initialStatus,
       rawDiff: initialRawDiff,
+      reverseDiff: initialReverseDiff,
     } = await this.handleToolUse(toolName, toolArgs, messages);
 
     if (initialStatus !== 'success') {
-      return {finalText, toolResults, finalStatus: initialStatus, rawDiff: initialRawDiff};
+      return {
+        finalText,
+        toolResults,
+        finalStatus: initialStatus,
+        rawDiff: initialRawDiff,
+        reverseDiff: initialReverseDiff,
+      };
     }
 
     let finalStatus: ToolCallStatus = initialStatus;
     let rawDiff = initialRawDiff;
+    let reverseDiff = initialReverseDiff;
 
     const response = await this.anthropic?.messages.create({
       model: modelName,
@@ -259,6 +272,7 @@ export class FileEditTool {
             toolResults: nextRoundToolResults,
             finalStatus: nextRoundFinalStatus,
             rawDiff: nextRoundRawDiff,
+            reverseDiff: nextRoundReverseDiff,
           } = await this.handleAnthropicToolUse(
             modelName,
             content.name,
@@ -272,6 +286,9 @@ export class FileEditTool {
           if (nextRoundRawDiff) {
             rawDiff = nextRoundRawDiff;
           }
+          if (nextRoundReverseDiff) {
+            reverseDiff = nextRoundReverseDiff;
+          }
         } else {
           // If we get a tool use response but we've reached the round limit
           finalText.push(
@@ -282,7 +299,7 @@ export class FileEditTool {
       }
     }
 
-    return {finalText, toolResults, finalStatus, rawDiff};
+    return {finalText, toolResults, finalStatus, rawDiff, reverseDiff};
   }
 
   private async handleOpenAIToolUse(
@@ -296,20 +313,29 @@ export class FileEditTool {
     toolResults: string[];
     finalStatus: ToolCallStatus;
     rawDiff?: string;
+    reverseDiff?: string;
   }> {
     const {
       finalText,
       toolResults,
       finalStatus: initialStatus,
       rawDiff: initialRawDiff,
+      reverseDiff: initialReverseDiff,
     } = await this.handleToolUse(toolName, toolArgs, messages);
 
     if (initialStatus !== 'success') {
-      return {finalText, toolResults, finalStatus: initialStatus, rawDiff: initialRawDiff};
+      return {
+        finalText,
+        toolResults,
+        finalStatus: initialStatus,
+        rawDiff: initialRawDiff,
+        reverseDiff: initialReverseDiff,
+      };
     }
 
     let finalStatus: ToolCallStatus = initialStatus;
     let rawDiff = initialRawDiff;
+    let reverseDiff = initialReverseDiff;
 
     const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
@@ -341,6 +367,7 @@ export class FileEditTool {
             toolResults: nextRoundToolResults,
             finalStatus: nextRoundFinalStatus,
             rawDiff: nextRoundRawDiff,
+            reverseDiff: nextRoundReverseDiff,
           } = await this.handleOpenAIToolUse(
             modelName,
             toolCall.function.name,
@@ -354,6 +381,9 @@ export class FileEditTool {
           if (nextRoundRawDiff) {
             rawDiff = nextRoundRawDiff;
           }
+          if (nextRoundReverseDiff) {
+            reverseDiff = nextRoundReverseDiff;
+          }
         } else {
           // If we get a tool use response but we've reached the round limit
           finalText.push(
@@ -364,7 +394,7 @@ export class FileEditTool {
       }
     }
 
-    return {finalText, toolResults, finalStatus, rawDiff};
+    return {finalText, toolResults, finalStatus, rawDiff, reverseDiff};
   }
 
   private convertAnthropicMessageToOpenAI(msg: MessageParam): ChatCompletionMessageParam {
@@ -386,10 +416,12 @@ export class FileEditTool {
     finalStatus: ToolCallStatus;
     toolCallCount: number;
     rawDiff?: string;
+    reverseDiff?: string;
   }> {
     let toolCallCount = 0;
     let finalStatus: ToolCallStatus = 'success';
     let rawDiff: string | undefined;
+    let reverseDiff: string | undefined;
 
     await this.refreshFileContents();
 
@@ -440,6 +472,7 @@ export class FileEditTool {
             toolResults: newToolResults,
             finalStatus: toolFinalStatus,
             rawDiff: newRawDiff,
+            reverseDiff: newReverseDiff,
           } = await this.handleOpenAIToolUse(
             this.modelName,
             toolCall.function.name,
@@ -453,6 +486,9 @@ export class FileEditTool {
           if (newRawDiff) {
             rawDiff = newRawDiff;
           }
+          if (newReverseDiff) {
+            reverseDiff = newReverseDiff;
+          }
         }
       }
 
@@ -460,7 +496,7 @@ export class FileEditTool {
         finalStatus = 'no_tool_calls';
       }
 
-      return {finalText, toolResults, finalStatus, toolCallCount, rawDiff};
+      return {finalText, toolResults, finalStatus, toolCallCount, rawDiff, reverseDiff};
     } else if (this.provider === AI_PROVIDERS.ANTHROPIC) {
       const response = await this.anthropic?.messages.create({
         model: this.modelName,
@@ -481,6 +517,7 @@ export class FileEditTool {
             toolResults: newToolResults,
             finalStatus: toolFinalStatus,
             rawDiff: newRawDiff,
+            reverseDiff: newReverseDiff,
           } = await this.handleAnthropicToolUse(
             this.modelName,
             content.name,
@@ -494,6 +531,9 @@ export class FileEditTool {
           if (newRawDiff) {
             rawDiff = newRawDiff;
           }
+          if (newReverseDiff) {
+            reverseDiff = newReverseDiff;
+          }
         }
       }
 
@@ -501,7 +541,7 @@ export class FileEditTool {
         finalStatus = 'no_tool_calls';
       }
 
-      return {finalText, toolResults, finalStatus, toolCallCount, rawDiff};
+      return {finalText, toolResults, finalStatus, toolCallCount, rawDiff, reverseDiff};
     } else {
       return {
         finalText: [`[Unsupported model: ${this.modelName}]`],

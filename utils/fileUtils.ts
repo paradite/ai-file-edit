@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import {createTwoFilesPatch} from 'diff';
+import {createTwoFilesPatch, parsePatch, reversePatch, formatPatch} from 'diff';
 
 // Normalize all paths consistently
 export function normalizePath(p: string): string {
@@ -87,6 +87,21 @@ export function createUnifiedDiff(
   );
 }
 
+export function createReverseUnifiedDiff(
+  originalContent: string,
+  newContent: string,
+  filepath: string = 'file',
+): string {
+  // Create the forward diff
+  const forwardDiff = createUnifiedDiff(originalContent, newContent, filepath);
+  // Parse the diff into a structured format
+  const parsedPatch = parsePatch(forwardDiff);
+  // Reverse the patch
+  const reversedPatch = reversePatch(parsedPatch);
+  // Format the reversed patch back into a string
+  return formatPatch(reversedPatch);
+}
+
 export async function applyFileEdits(
   filePath: string,
   edits: Array<{oldText: string; newText: string}> | undefined,
@@ -97,6 +112,7 @@ export async function applyFileEdits(
   fileExists: boolean;
   newFileCreated: boolean;
   validEdits: boolean;
+  reverseDiff: string;
 }> {
   let originalContent = '';
   let fileExists = false;
@@ -171,6 +187,7 @@ export async function applyFileEdits(
           fileExists,
           newFileCreated,
           validEdits: false,
+          reverseDiff: '',
         };
       }
     }
@@ -178,6 +195,8 @@ export async function applyFileEdits(
 
   // Create unified diff
   const rawDiff = createUnifiedDiff(originalContent, modifiedContent, filePath);
+  // Create reverse diff
+  const reverseDiff = createReverseUnifiedDiff(originalContent, modifiedContent, filePath);
 
   if (originalContent === modifiedContent) {
     validEdits = false;
@@ -210,5 +229,5 @@ export async function applyFileEdits(
     response = `No edits were made to file ${filePath}`;
   }
 
-  return {response, rawDiff, fileExists, newFileCreated, validEdits};
+  return {response, rawDiff, fileExists, newFileCreated, validEdits, reverseDiff};
 }

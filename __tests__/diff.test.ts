@@ -2,6 +2,7 @@ import {FileEditTool} from '../index';
 import fs from 'fs/promises';
 import path from 'path';
 import {ModelEnum, AI_PROVIDERS} from 'llm-info';
+import {parsePatch, applyPatch} from 'diff';
 
 const model = ModelEnum['claude-3-7-sonnet-20250219'];
 
@@ -116,5 +117,64 @@ describe('Diff Output Tests', () => {
     expect(rawDiff).toContain('@@ -0,0 +1,1 @@');
     expect(rawDiff).toContain('+function greet(name) { return "Hello, " + name; }');
     expect(rawDiff).toContain('\\ No newline at end of file');
+  });
+
+  test('should return reverse diff for file edits and be able to revert changes', async () => {
+    // Create a test file with initial content
+    const testFilePath = path.join(testDir, 'reverse-diff-test.js');
+    const initialContent = 'function add(a, b) { return a + b; }\nconsole.log(add(1, 2));';
+    await fs.writeFile(testFilePath, initialContent);
+
+    fileEditTool = new FileEditTool(
+      [testDir],
+      model,
+      AI_PROVIDERS.ANTHROPIC,
+      process.env.ANTHROPIC_API_KEY || '',
+      [testFilePath],
+    );
+
+    // Test editing file and getting diff
+    const response = await fileEditTool.processQuery(
+      `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
+    );
+
+    // Verify the response contains both forward and reverse diffs
+    expect(response.rawDiff).toBeDefined();
+    expect(response.rawDiff).not.toBe('');
+    expect(response.reverseDiff).toBeDefined();
+    expect(response.reverseDiff).not.toBe('');
+
+    // Verify the reverse diff format
+    const reverseDiff = response.reverseDiff!;
+
+    // The reverse diff should have swapped the - and + lines compared to the forward diff
+    expect(reverseDiff).toContain('sample-diff/reverse-diff-test.js');
+    expect(reverseDiff).toContain('---');
+    expect(reverseDiff).toContain('+++');
+    expect(reverseDiff).toContain('@@');
+    expect(reverseDiff).toContain('-function multiply(a, b) { return a * b; }');
+    expect(reverseDiff).toContain('+function add(a, b) { return a + b; }');
+    expect(reverseDiff).toContain('-console.log(multiply(1, 2));');
+    expect(reverseDiff).toContain('+console.log(add(1, 2));');
+
+    // Verify we can use the reverse diff to revert changes
+    const modifiedContent = await fs.readFile(testFilePath, 'utf-8');
+    expect(modifiedContent).toBe(
+      'function multiply(a, b) { return a * b; }\nconsole.log(multiply(1, 2));',
+    );
+
+    // Parse and apply the reverse diff directly using the diff package
+    const patches = parsePatch(reverseDiff);
+    const revertedContent = applyPatch(modifiedContent, patches[0]);
+    if (typeof revertedContent !== 'string') {
+      throw new Error('Failed to apply patch');
+    }
+
+    // Write the reverted content back to the file
+    await fs.writeFile(testFilePath, revertedContent, 'utf-8');
+
+    // Verify the file was reverted to initialContent
+    const finalContent = await fs.readFile(testFilePath, 'utf-8');
+    expect(finalContent).toBe(initialContent);
   });
 });
