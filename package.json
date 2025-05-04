@@ -16,6 +16,7 @@
     "test": "npm run build && jest",
     "test:watch": "npm run build && jest --watch",
     "test:file": "npm run build && jest --verbose",
+    "test:diff": "npm run build && jest --verbose diff.test.ts",
     "test:openai": "npm run build && jest --verbose file-edit-openai.test.ts",
     "test:claude": "npm run build && jest --verbose file-edit-claude.test.ts",
     "test:claude-multiple": "npm run build && jest --verbose file-edit-claude-multiple.test.ts",

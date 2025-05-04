@@ -91,10 +91,21 @@ export async function applyFileEdits(
   filePath: string,
   edits: Array<{oldText: string; newText: string}> | undefined,
   content: string | undefined,
-): Promise<string> {
+): Promise<{
+  response: string;
+  rawDiff: string;
+  fileExists: boolean;
+  newFileCreated: boolean;
+  validEdits: boolean;
+}> {
   let originalContent = '';
+  let fileExists = false;
+  let newFileCreated = false;
+  let validEdits = false;
+
   try {
     originalContent = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
+    fileExists = true;
   } catch (error) {
     // File doesn't exist yet, treat as empty content
     originalContent = '';
@@ -154,26 +165,50 @@ export async function applyFileEdits(
       }
 
       if (!matchFound) {
-        return `Error: Could not find exact match for edit:\n${edit.oldText}`;
+        return {
+          response: `Error: Could not find exact match for edit:\n${edit.oldText}`,
+          rawDiff: '',
+          fileExists,
+          newFileCreated,
+          validEdits: false,
+        };
       }
     }
   }
 
   // Create unified diff
-  const diff = createUnifiedDiff(originalContent, modifiedContent, filePath);
+  const rawDiff = createUnifiedDiff(originalContent, modifiedContent, filePath);
+
+  if (originalContent === modifiedContent) {
+    validEdits = false;
+  } else {
+    validEdits = true;
+  }
 
   // Format diff with appropriate number of backticks
   let numBackticks = 3;
-  while (diff.includes('`'.repeat(numBackticks))) {
+  while (rawDiff.includes('`'.repeat(numBackticks))) {
     numBackticks++;
   }
-  const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
+  const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${rawDiff}${'`'.repeat(
+    numBackticks,
+  )}\n\n`;
 
   await fs.writeFile(filePath, modifiedContent, 'utf-8');
 
-  const response = `Successfully ${
-    originalContent ? 'updated' : 'created'
-  } file ${filePath} with diff:\n${formattedDiff}`;
+  let response = '';
 
-  return response;
+  if (!fileExists) {
+    newFileCreated = true;
+  }
+
+  if (newFileCreated) {
+    response = `Successfully created file ${filePath} with content:\n${modifiedContent}`;
+  } else if (validEdits) {
+    response = `Successfully updated file ${filePath} with diff:\n${formattedDiff}`;
+  } else {
+    response = `No edits were made to file ${filePath}`;
+  }
+
+  return {response, rawDiff, fileExists, newFileCreated, validEdits};
 }
