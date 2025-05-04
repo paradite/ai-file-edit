@@ -8,8 +8,6 @@ import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import {validatePath, applyFileEdits, createReverseUnifiedDiff} from './utils/fileUtils.js';
 
-const MAX_TOOL_USE_ROUNDS = 3;
-
 type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
 
 const followupTemplate = (toolResults: string) => `Tool call returned the following result:
@@ -45,17 +43,20 @@ export class FileEditTool {
   private modelName: ModelEnum;
   private provider: AI_PROVIDER_TYPE;
   private fileContext: string[] = [];
+  private maxToolUseRounds: number;
   constructor(
     allowedDirectories: string[] = [],
     modelName: ModelEnum,
     provider: AI_PROVIDER_TYPE,
     apiKey: string,
     fileContext: string[] = [],
+    maxToolUseRounds: number = 3,
   ) {
     this.allowedDirectories = allowedDirectories;
     this.modelName = modelName;
     this.provider = provider;
     this.fileContext = fileContext;
+    this.maxToolUseRounds = maxToolUseRounds;
 
     if (provider === AI_PROVIDERS.ANTHROPIC) {
       this.anthropic = new Anthropic({
@@ -265,7 +266,7 @@ export class FileEditTool {
       if (content.type === 'text') {
         finalText.push(content.text);
       } else if (content.type === 'tool_use') {
-        if (round < MAX_TOOL_USE_ROUNDS) {
+        if (round < this.maxToolUseRounds) {
           // If we get a tool use response and we haven't reached the round limit
           const {
             finalText: nextRoundFinalText,
@@ -292,7 +293,7 @@ export class FileEditTool {
         } else {
           // If we get a tool use response but we've reached the round limit
           finalText.push(
-            `[Maximum tool use rounds (${MAX_TOOL_USE_ROUNDS}) reached. Stopping further tool calls.]`,
+            `[Maximum tool use rounds (${this.maxToolUseRounds}) reached. Stopping further tool calls.]`,
           );
           finalStatus = 'retry_limit_reached';
         }
@@ -360,7 +361,7 @@ export class FileEditTool {
 
     if (message?.tool_calls) {
       for (const toolCall of message.tool_calls) {
-        if (round < MAX_TOOL_USE_ROUNDS) {
+        if (round < this.maxToolUseRounds) {
           // If we get a tool use response and we haven't reached the round limit
           const {
             finalText: nextRoundFinalText,
@@ -387,7 +388,7 @@ export class FileEditTool {
         } else {
           // If we get a tool use response but we've reached the round limit
           finalText.push(
-            `[Maximum tool use rounds (${MAX_TOOL_USE_ROUNDS}) reached. Stopping further tool calls.]`,
+            `[Maximum tool use rounds (${this.maxToolUseRounds}) reached. Stopping further tool calls.]`,
           );
           finalStatus = 'retry_limit_reached';
         }
