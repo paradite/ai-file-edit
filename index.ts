@@ -113,15 +113,15 @@ export class FileEditTool {
     finalText: string[];
     toolResults: string[];
     finalStatus: ToolCallStatus;
-    rawDiff?: string;
-    reverseDiff?: string;
+    rawDiff?: Record<string, string>;
+    reverseDiff?: Record<string, string>;
     newFileCreated: boolean;
   }> {
     const finalText = [];
     const toolResults = [];
     let finalStatus: ToolCallStatus = 'success';
-    let rawDiff: string | undefined;
-    let reverseDiff: string | undefined;
+    let rawDiff: Record<string, string> | undefined;
+    let reverseDiff: Record<string, string> | undefined;
     let newFileCreated: boolean = false;
 
     finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
@@ -166,8 +166,8 @@ export class FileEditTool {
         } = await applyFileEdits(validPath, parsed.data.edits, parsed.data.content);
         result = response;
         if (validEdits) {
-          rawDiff = newRawDiff;
-          reverseDiff = newReverseDiff;
+          rawDiff = {[validPath]: newRawDiff};
+          reverseDiff = {[validPath]: newReverseDiff};
         }
         newFileCreated = resultNewFileCreated;
       } catch (error) {
@@ -231,8 +231,8 @@ export class FileEditTool {
     finalText: string[];
     toolResults: string[];
     finalStatus: ToolCallStatus;
-    rawDiff?: string;
-    reverseDiff?: string;
+    rawDiff?: Record<string, string>;
+    reverseDiff?: Record<string, string>;
   }> {
     const {
       finalText,
@@ -287,10 +287,10 @@ export class FileEditTool {
           toolResults.push(...nextRoundToolResults);
           finalStatus = nextRoundFinalStatus;
           if (nextRoundRawDiff) {
-            rawDiff = nextRoundRawDiff;
+            rawDiff = {...rawDiff, ...nextRoundRawDiff};
           }
           if (nextRoundReverseDiff) {
-            reverseDiff = nextRoundReverseDiff;
+            reverseDiff = {...reverseDiff, ...nextRoundReverseDiff};
           }
         } else {
           // If we get a tool use response but we've reached the round limit
@@ -315,8 +315,8 @@ export class FileEditTool {
     finalText: string[];
     toolResults: string[];
     finalStatus: ToolCallStatus;
-    rawDiff?: string;
-    reverseDiff?: string;
+    rawDiff?: Record<string, string>;
+    reverseDiff?: Record<string, string>;
   }> {
     const {
       finalText,
@@ -382,10 +382,10 @@ export class FileEditTool {
           toolResults.push(...nextRoundToolResults);
           finalStatus = nextRoundFinalStatus;
           if (nextRoundRawDiff) {
-            rawDiff = nextRoundRawDiff;
+            rawDiff = {...rawDiff, ...nextRoundRawDiff};
           }
           if (nextRoundReverseDiff) {
-            reverseDiff = nextRoundReverseDiff;
+            reverseDiff = {...reverseDiff, ...nextRoundReverseDiff};
           }
         } else {
           // If we get a tool use response but we've reached the round limit
@@ -418,13 +418,13 @@ export class FileEditTool {
     toolResults: string[];
     finalStatus: ToolCallStatus;
     toolCallCount: number;
-    rawDiff?: string;
-    reverseDiff?: string;
+    rawDiff?: Record<string, string>;
+    reverseDiff?: Record<string, string>;
   }> {
     let toolCallCount = 0;
     let finalStatus: ToolCallStatus = 'success';
-    let rawDiff: string | undefined;
-    let reverseDiff: string | undefined;
+    let rawDiff: Record<string, string> | undefined;
+    let reverseDiff: Record<string, string> | undefined;
 
     await this.refreshFileContents();
 
@@ -487,10 +487,10 @@ export class FileEditTool {
           finalStatus = toolFinalStatus;
           toolCallCount++;
           if (newRawDiff) {
-            rawDiff = newRawDiff;
+            rawDiff = {...rawDiff, ...newRawDiff};
           }
           if (newReverseDiff) {
-            reverseDiff = newReverseDiff;
+            reverseDiff = {...reverseDiff, ...newReverseDiff};
           }
         }
       }
@@ -532,10 +532,10 @@ export class FileEditTool {
           finalStatus = toolFinalStatus;
           toolCallCount++;
           if (newRawDiff) {
-            rawDiff = newRawDiff;
+            rawDiff = {...rawDiff, ...newRawDiff};
           }
           if (newReverseDiff) {
-            reverseDiff = newReverseDiff;
+            reverseDiff = {...reverseDiff, ...newReverseDiff};
           }
         }
       }

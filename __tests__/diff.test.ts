@@ -49,7 +49,7 @@ describe('Diff Output Tests', () => {
     expect(response.rawDiff).not.toBe('');
 
     // Verify the raw diff format
-    const rawDiff = response.rawDiff!;
+    const rawDiff = response.rawDiff![testFilePath];
 
     // Index: /Users/paradite/workspace/ai-file-edit/sample-diff/diff-test.js
     // ===================================================================
@@ -101,7 +101,7 @@ describe('Diff Output Tests', () => {
     expect(response.rawDiff).not.toBe('');
 
     // Verify the raw diff format for new file
-    const rawDiff = response.rawDiff!;
+    const rawDiff = response.rawDiff![newFilePath];
 
     // Index: /Users/paradite/workspace/ai-file-edit/sample-diff/new-file.js
     // ===================================================================
@@ -145,7 +145,7 @@ describe('Diff Output Tests', () => {
     expect(response.reverseDiff).not.toBe('');
 
     // Verify the reverse diff format
-    const reverseDiff = response.reverseDiff!;
+    const reverseDiff = response.reverseDiff![testFilePath];
 
     // The reverse diff should have swapped the - and + lines compared to the forward diff
     expect(reverseDiff).toContain('sample-diff/reverse-diff-test.js');
