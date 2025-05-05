@@ -23,15 +23,18 @@ export async function validatePath(
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
-    : path.resolve(process.cwd(), expandedPath);
+    : path.resolve(expandedPath);
 
   const normalizedRequested = normalizePath(absolute);
+  const normalizedAllowed = allowedDirectories.map(dir =>
+    normalizePath(path.resolve(expandHome(dir))),
+  );
 
   // First check if the requested path is within allowed directories
-  const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
+  const isAllowed = normalizedAllowed.some(dir => normalizedRequested.startsWith(dir));
   if (!isAllowed) {
     throw new Error(
-      `Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(
+      `Access denied - path outside allowed directories: ${absolute} not in ${normalizedAllowed.join(
         ', ',
       )}`,
     );
@@ -53,7 +56,7 @@ export async function validatePath(
     try {
       const realParentPath = await fs.realpath(parentDir);
       const normalizedParent = normalizePath(realParentPath);
-      const isParentAllowed = allowedDirectories.some(dir => normalizedParent.startsWith(dir));
+      const isParentAllowed = normalizedAllowed.some(dir => normalizedParent.startsWith(dir));
       if (!isParentAllowed) {
         throw new Error('Access denied - parent directory outside allowed directories');
       }
