@@ -170,4 +170,39 @@ describe('applyFileEdits', () => {
     const fileContent = await fs.readFile(testFilePath, 'utf-8');
     expect(fileContent).toBe('New content');
   });
+
+  // Windows-specific tests
+  if (process.platform === 'win32') {
+    const windowsTempDir = os.tmpdir();
+
+    test('should handle Windows paths with spaces in file editing', async () => {
+      const spacePath = path.join(windowsTempDir, 'test folder', 'file with spaces.txt');
+      await fs.mkdir(path.join(windowsTempDir, 'test folder'), {recursive: true});
+
+      const content = 'Initial content';
+      const result = await applyFileEdits(spacePath, undefined, content);
+
+      expect(result.newFileCreated).toBe(true);
+      expect(result.fileExists).toBe(false);
+      expect(result.validEdits).toBe(true);
+
+      const fileContent = await fs.readFile(spacePath, 'utf-8');
+      expect(fileContent).toBe(content);
+    });
+
+    test('should handle Windows paths with special characters', async () => {
+      const specialPath = path.join(windowsTempDir, 'test#folder', 'file@test.txt');
+      await fs.mkdir(path.join(windowsTempDir, 'test#folder'), {recursive: true});
+
+      const content = 'Content with special chars';
+      const result = await applyFileEdits(specialPath, undefined, content);
+
+      expect(result.newFileCreated).toBe(true);
+      expect(result.fileExists).toBe(false);
+      expect(result.validEdits).toBe(true);
+
+      const fileContent = await fs.readFile(specialPath, 'utf-8');
+      expect(fileContent).toBe(content);
+    });
+  }
 });

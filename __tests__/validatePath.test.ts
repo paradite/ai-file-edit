@@ -93,4 +93,24 @@ describe('validatePath', () => {
       'Parent directory does not exist',
     );
   });
+
+  // Windows-specific tests
+  if (process.platform === 'win32') {
+    const windowsTempDir = os.tmpdir();
+    const driveLetter = windowsTempDir.split(':')[0];
+
+    test('should handle Windows absolute paths with drive letters', async () => {
+      const windowsPath = `${driveLetter}:\\Windows\\Temp\\test\\file.txt`;
+      const allowedDirs = [`${driveLetter}:\\Windows\\Temp`];
+      const validatedPath = await validatePath(windowsPath, allowedDirs);
+      expect(validatedPath).toBe(path.resolve(windowsPath));
+    });
+
+    test('should handle Windows paths with spaces', async () => {
+      const spacePath = `${driveLetter}:\\Program Files\\test\\file.txt`;
+      const allowedDirs = [`${driveLetter}:\\Program Files`];
+      const validatedPath = await validatePath(spacePath, allowedDirs);
+      expect(validatedPath).toBe(path.resolve(spacePath));
+    });
+  }
 });
