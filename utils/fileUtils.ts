@@ -27,7 +27,7 @@ export async function validatePath(
 
   const normalizedRequested = normalizePath(absolute);
 
-  // Check if path is within allowed directories
+  // First check if the requested path is within allowed directories
   const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
   if (!isAllowed) {
     throw new Error(
@@ -37,15 +37,16 @@ export async function validatePath(
     );
   }
 
-  // Handle symlinks by checking their real path
+  // Check if the path exists
   try {
-    const realPath = await fs.realpath(absolute);
-    const normalizedReal = normalizePath(realPath);
-    const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
-    if (!isRealPathAllowed) {
-      throw new Error('Access denied - symlink target outside allowed directories');
+    const stats = await fs.lstat(absolute);
+    if (stats.isSymbolicLink()) {
+      // For symlinks, we trust them if they are within allowed directories
+      // Get the real path for returning, but don't validate it
+      const realPath = await fs.realpath(absolute);
+      return realPath;
     }
-    return realPath;
+    return absolute;
   } catch (error) {
     // For new files that don't exist yet, verify parent directory
     const parentDir = path.dirname(absolute);

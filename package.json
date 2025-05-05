@@ -1,6 +1,6 @@
 {
   "name": "ai-file-edit",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -23,6 +23,8 @@
     "test:claude": "npm run build && jest --verbose file-edit-claude.test.ts",
     "test:claude-multiple": "npm run build && jest --verbose file-edit-claude-multiple.test.ts",
     "test:openai-multiple": "npm run build && jest --verbose file-edit-openai-multiple.test.ts",
+    "test:validate-path": "npm run build && jest --verbose validatePath.test.ts",
+    "test:ci": "npm run build && jest --ci --coverage --verbose validatePath.test.ts",
     "build": "tsup index.ts --format esm,cjs --dts --clean",
     "prepublish": "npm run build",
     "prepare": "npm run build",
