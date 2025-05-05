@@ -100,17 +100,33 @@ describe('validatePath', () => {
     const driveLetter = windowsTempDir.split(':')[0];
 
     test('should handle Windows absolute paths with drive letters', async () => {
-      const windowsPath = `${driveLetter}:\\Windows\\Temp\\test\\file.txt`;
-      const allowedDirs = [`${driveLetter}:\\Windows\\Temp`];
+      const testDir = `${driveLetter}:\\test_validate_path`;
+      await fs.mkdir(testDir, {recursive: true});
+
+      const windowsPath = `${driveLetter}:\\test_validate_path\\file.txt`;
+      const allowedDirs = [`${driveLetter}:\\`];
       const validatedPath = await validatePath(windowsPath, allowedDirs);
       expect(validatedPath).toBe(path.resolve(windowsPath));
     });
 
     test('should handle Windows paths with spaces', async () => {
-      const spacePath = `${driveLetter}:\\Program Files\\test\\file.txt`;
-      const allowedDirs = [`${driveLetter}:\\Program Files`];
+      const testDir = `${driveLetter}:\\test folder`;
+      await fs.mkdir(testDir, {recursive: true});
+
+      const spacePath = `${driveLetter}:\\test folder\\file.txt`;
+      const allowedDirs = [`${driveLetter}:\\`];
       const validatedPath = await validatePath(spacePath, allowedDirs);
       expect(validatedPath).toBe(path.resolve(spacePath));
+    });
+
+    test('should handle Windows TEMP paths', async () => {
+      const testDir = path.join(windowsTempDir, 'test_validate_path');
+      await fs.mkdir(testDir, {recursive: true});
+
+      const tempPath = path.join(testDir, 'file.txt');
+      const allowedDirs = [windowsTempDir];
+      const validatedPath = await validatePath(tempPath, allowedDirs);
+      expect(validatedPath).toBe(path.resolve(tempPath));
     });
   }
 });
