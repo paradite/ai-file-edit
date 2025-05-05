@@ -121,12 +121,20 @@ describe('validatePath', () => {
 
     test('should handle Windows TEMP paths', async () => {
       const testDir = path.join(windowsTempDir, 'test_validate_path');
+      // Ensure the directory exists before testing
       await fs.mkdir(testDir, {recursive: true});
 
+      // Create a file to ensure the path is valid
       const tempPath = path.join(testDir, 'file.txt');
+      await fs.writeFile(tempPath, 'test content');
+
       const allowedDirs = [windowsTempDir];
       const validatedPath = await validatePath(tempPath, allowedDirs);
       expect(validatedPath).toBe(path.resolve(tempPath));
+
+      // Clean up
+      await fs.unlink(tempPath);
+      await fs.rmdir(testDir);
     });
   }
 });
