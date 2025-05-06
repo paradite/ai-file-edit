@@ -26,11 +26,16 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
     // Create test files with initial content
     const file1Path = path.join(testDir, '1', 'file1.js');
     const file2Path = path.join(testDir, '1', 'file2.js');
+    const file3Path = path.join(testDir, '1', 'file3.js');
 
     await fs.writeFile(file1Path, 'function add(a, b) { return a + b; }\nconsole.log(add(1, 2));');
     await fs.writeFile(
       file2Path,
       'function subtract(a, b) { return a - b; }\nconsole.log(subtract(5, 3));',
+    );
+    await fs.writeFile(
+      file3Path,
+      'function divide(a, b) { return a / b; }\nconsole.log(divide(10, 2));',
     );
 
     fileEditTool = new FileEditTool(
@@ -39,27 +44,56 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
       model,
       AI_PROVIDERS.OPENAI,
       process.env.OPENAI_API_KEY || '',
-      [path.join(testDir, '1', 'file1.js'), path.join(testDir, '1', 'file2.js')],
+      [
+        path.join(testDir, '1', 'file1.js'),
+        path.join(testDir, '1', 'file2.js'),
+        path.join(testDir, '1', 'file3.js'),
+      ],
     );
 
     // Test editing multiple files in allowed directory using OpenAI
     const response = await fileEditTool.processQuery(
-      `update both ${file1Path} and ${file2Path} to change the arithmetic operations to multiplication. 
-       In ${file1Path}, change add to multiply and update the function calls.
-       In ${file2Path}, change subtract to multiply and update the function calls.`,
+      `Please modify all three JavaScript files to use multiplication operations instead of their current operations.
+       In file1.js, replace the add function with multiply and update its implementation to use * operator.
+       In file2.js, replace the subtract function with multiply and update its implementation to use * operator.
+       In file3.js, replace the divide function with multiply and update its implementation to use * operator.
+       Keep the same function parameters and console.log statements, just change the operation.`,
     );
+
+    // Check the response contains expected diffs for all three files
+    expect(response.rawDiff).toBeDefined();
+    expect(response.reverseDiff).toBeDefined();
+
+    // Check rawDiff for each file
+    expect(response.rawDiff?.[file1Path]).toContain('-function add(a, b)');
+    expect(response.rawDiff?.[file1Path]).toContain('+function multiply(a, b)');
+
+    expect(response.rawDiff?.[file2Path]).toContain('-function subtract(a, b)');
+    expect(response.rawDiff?.[file2Path]).toContain('+function multiply(a, b)');
+
+    expect(response.rawDiff?.[file3Path]).toContain('-function divide(a, b)');
+    expect(response.rawDiff?.[file3Path]).toContain('+function multiply(a, b)');
+
+    // Check reverseDiff for each file (should be the opposite of rawDiff)
+    expect(response.reverseDiff?.[file1Path]).toContain('-function multiply(a, b)');
+    expect(response.reverseDiff?.[file1Path]).toContain('+function add(a, b)');
+
+    expect(response.reverseDiff?.[file2Path]).toContain('-function multiply(a, b)');
+    expect(response.reverseDiff?.[file2Path]).toContain('+function subtract(a, b)');
+
+    expect(response.reverseDiff?.[file3Path]).toContain('-function multiply(a, b)');
+    expect(response.reverseDiff?.[file3Path]).toContain('+function divide(a, b)');
+
     // console.log('Tool results:', response.toolResults.join('\n'));
-    // console.log('Response:', response.finalText.join('\n'));
-    // console.log('Final status:', response.finalStatus);
-    // console.log('Tool call count:', response.toolCallCount);
     expect(response.finalText.join('\n')).toContain('Successfully updated file');
     expect(response.finalStatus).toBe('success');
     expect(response.toolCallCount).toBeGreaterThanOrEqual(1);
-    expect(response.toolCallCount).toBeLessThanOrEqual(2);
+    expect(response.toolCallCount).toBeLessThanOrEqual(4);
 
     // Verify the files were edited correctly
     const file1Content = await fs.readFile(file1Path, 'utf-8');
     const file2Content = await fs.readFile(file2Path, 'utf-8');
+    const file3Content = await fs.readFile(file3Path, 'utf-8');
 
     // Check file1
     expect(file1Content).toContain('function multiply(a, b)');
@@ -76,5 +110,13 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
     expect(file2Content).not.toContain('function subtract(a, b)');
     expect(file2Content).not.toContain('a - b');
     expect(file2Content).not.toContain('console.log(subtract(5, 3));');
+
+    // Check file3
+    expect(file3Content).toContain('function multiply(a, b)');
+    expect(file3Content).toContain('a * b');
+    expect(file3Content).toContain('console.log(multiply(10, 2));');
+    expect(file3Content).not.toContain('function divide(a, b)');
+    expect(file3Content).not.toContain('a / b');
+    expect(file3Content).not.toContain('console.log(divide(10, 2));');
   });
 });
