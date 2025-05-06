@@ -47,21 +47,23 @@ import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
 // Initialize the tool with Claude
 const claudeFileEditTool = new FileEditTool(
-  ['/path/to/allowed/directory'],
+  '/path/to/parent/directory', // Parent directory for relative paths
+  ['/path/to/allowed/directory'], // Allowed directories for file operations
   ModelEnum['claude-3-7-sonnet-20250219'],
   AI_PROVIDERS.ANTHROPIC,
   process.env.ANTHROPIC_API_KEY,
-  ['/path/to/file1.js', '/path/to/file2.js'],
+  ['/path/to/file1.js', '/path/to/file2.js'], // Optional: Files to include in context
   5, // Optional: Maximum number of tool use rounds (default: 3)
 );
 
 // Initialize the tool with GPT
 const gptFileEditTool = new FileEditTool(
-  ['/path/to/allowed/directory'],
+  '/path/to/parent/directory', // Parent directory for relative paths
+  ['/path/to/allowed/directory'], // Allowed directories for file operations
   ModelEnum['gpt-4.1'],
   AI_PROVIDERS.OPENAI,
   process.env.OPENAI_API_KEY,
-  ['/path/to/file1.js', '/path/to/file2.js'],
+  ['/path/to/file1.js', '/path/to/file2.js'], // Optional: Files to include in context
   5, // Optional: Maximum number of tool use rounds (default: 3)
 );
 ```
@@ -73,11 +75,12 @@ import {FileEditTool} from 'ai-file-edit';
 import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
 const fileEditTool = new FileEditTool(
-  ['/path/to/allowed/directory'],
+  '/path/to/parent/directory', // Parent directory for relative paths
+  ['/path/to/allowed/directory'], // Allowed directories for file operations
   ModelEnum['claude-3-7-sonnet-20250219'],
   AI_PROVIDERS.ANTHROPIC,
   'your-api-key',
-  ['/path/to/file/to/edit'],
+  ['/path/to/file/to/edit'], // Optional: Files to include in context
 );
 
 const response = await fileEditTool.processQuery('Update the file to add a new function');
@@ -234,17 +237,19 @@ npm test
 import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
 constructor(
-  allowedDirectories: string[],
+  parentDir: string,  // Parent directory for relative paths
+  allowedDirectories: string[] = [],  // Allowed directories for file operations
   modelName: ModelEnum,
   provider: AI_PROVIDER_TYPE,
   apiKey: string,
-  fileContext: string[] = [],
-  maxToolUseRounds: number = 3,
+  fileContext: string[] = [],  // Optional: Files to include in context
+  maxToolUseRounds: number = 3,  // Optional: Maximum number of tool use rounds
 )
 ```
 
 Parameters:
 
+- `parentDir`: Parent directory for resolving relative paths
 - `allowedDirectories`: Array of directories where file operations are allowed
 - `modelName`: The AI model to use (from ModelEnum)
 - `provider`: The AI provider (from AI_PROVIDERS)
