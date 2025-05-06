@@ -250,11 +250,12 @@ export class FileEditTool {
       console.log('Sending Anthropic followup message');
       console.log(JSON.stringify(messages, null, 2));
     }
-    const response = await this.anthropic?.messages.create({
+    const response = await this.anthropic?.beta.messages.create({
       model: modelName,
       max_tokens: 8192,
       messages,
       tools: this.tools,
+      betas: ['token-efficient-tools-2025-02-19'],
     });
 
     if (debug) {
@@ -466,12 +467,16 @@ export class FileEditTool {
         console.log('Sending Anthropic initial message');
       }
 
-      const message = await this.anthropic!.messages.create({
+      const message = await this.anthropic!.beta.messages.create({
         model: this.modelName,
         max_tokens: 8192,
         messages: globalMessages,
         tools: this.tools,
+        betas: ['token-efficient-tools-2025-02-19'],
       });
+
+      console.log('Received Anthropic initial response');
+      console.log(JSON.stringify(message, null, 2));
 
       if (Array.isArray(message.content)) {
         for (const content of message.content) {
