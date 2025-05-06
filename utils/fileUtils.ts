@@ -17,13 +17,17 @@ export function expandHome(filepath: string): string {
 
 // Security utilities
 export async function validatePath(
+  parentDir: string,
   requestedPath: string,
   allowedDirectories: string[],
 ): Promise<string> {
+  const expandedParentDir = expandHome(parentDir);
   const expandedPath = expandHome(requestedPath);
+
+  // Resolve the requested path relative to parent directory if it's not absolute
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
-    : path.resolve(expandedPath);
+    : path.resolve(expandedParentDir, expandedPath);
 
   const normalizedRequested = normalizePath(absolute);
   const normalizedAllowed = allowedDirectories.map(dir =>
@@ -107,6 +111,7 @@ export function createReverseUnifiedDiff(
 }
 
 export async function applyFileEdits(
+  parentDir: string,
   filePath: string,
   edits: Array<{oldText: string; newText: string}> | undefined,
   content: string | undefined,
@@ -123,8 +128,11 @@ export async function applyFileEdits(
   let newFileCreated = false;
   let validEdits = false;
 
+  // Resolve the file path relative to parentDir if it's not absolute
+  const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(parentDir, filePath);
+
   try {
-    originalContent = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
+    originalContent = normalizeLineEndings(await fs.readFile(absolutePath, 'utf-8'));
     fileExists = true;
   } catch (error) {
     // File doesn't exist yet, treat as empty content
@@ -198,9 +206,9 @@ export async function applyFileEdits(
   }
 
   // Create unified diff
-  const rawDiff = createUnifiedDiff(originalContent, modifiedContent, filePath);
+  const rawDiff = createUnifiedDiff(originalContent, modifiedContent, absolutePath);
   // Create reverse diff
-  const reverseDiff = createReverseUnifiedDiff(originalContent, modifiedContent, filePath);
+  const reverseDiff = createReverseUnifiedDiff(originalContent, modifiedContent, absolutePath);
 
   if (originalContent === modifiedContent) {
     validEdits = false;
@@ -217,7 +225,7 @@ export async function applyFileEdits(
     numBackticks,
   )}\n\n`;
 
-  await fs.writeFile(filePath, modifiedContent, 'utf-8');
+  await fs.writeFile(absolutePath, modifiedContent, 'utf-8');
 
   let response = '';
 
@@ -226,11 +234,11 @@ export async function applyFileEdits(
   }
 
   if (newFileCreated) {
-    response = `Successfully created file ${filePath} with content:\n${modifiedContent}`;
+    response = `Successfully created file ${absolutePath} with content:\n${modifiedContent}`;
   } else if (validEdits) {
-    response = `Successfully updated file ${filePath} with diff:\n${formattedDiff}`;
+    response = `Successfully updated file ${absolutePath} with diff:\n${formattedDiff}`;
   } else {
-    response = `No edits were made to file ${filePath}`;
+    response = `No edits were made to file ${absolutePath}`;
   }
 
   return {response, rawDiff, fileExists, newFileCreated, validEdits, reverseDiff};

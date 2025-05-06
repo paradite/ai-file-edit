@@ -31,11 +31,13 @@ describe('File Edit Tool with OpenAI', () => {
     );
 
     fileEditTool = new FileEditTool(
+      testDir,
       [path.join(testDir, '1')],
       model,
       AI_PROVIDERS.OPENAI,
       process.env.OPENAI_API_KEY || '',
       [path.join(testDir, '1', 'edit-test-openai.js')],
+      3,
     );
 
     // Test editing file in allowed directory using OpenAI
@@ -71,11 +73,13 @@ describe('File Edit Tool with OpenAI', () => {
     );
 
     fileEditTool = new FileEditTool(
+      testDir,
       [path.join(testDir, '1')],
       model,
       AI_PROVIDERS.OPENAI,
       process.env.OPENAI_API_KEY || '',
       [path.join(testDir, '1', 'edit-test-openai.js')],
+      3,
     );
 
     // Test editing file in non-allowed directory using OpenAI
@@ -98,11 +102,13 @@ describe('File Edit Tool with OpenAI', () => {
     const newFilePath = path.join(testDir, '1', 'new-file-openai.js');
 
     fileEditTool = new FileEditTool(
+      testDir,
       [path.join(testDir, '1')],
       model,
       AI_PROVIDERS.OPENAI,
       process.env.OPENAI_API_KEY || '',
       [path.join(testDir, '1', 'edit-test-openai.js')],
+      3,
     );
 
     // Test creating a new file using OpenAI

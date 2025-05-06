@@ -29,6 +29,7 @@ describe('Diff Output Tests', () => {
     await fs.writeFile(testFilePath, initialContent);
 
     fileEditTool = new FileEditTool(
+      testDir,
       [testDir],
       model,
       AI_PROVIDERS.ANTHROPIC,
@@ -78,6 +79,7 @@ describe('Diff Output Tests', () => {
     const newFilePath = path.join(testDir, 'new-file.js');
 
     fileEditTool = new FileEditTool(
+      testDir,
       [testDir],
       model,
       AI_PROVIDERS.ANTHROPIC,
@@ -126,6 +128,7 @@ describe('Diff Output Tests', () => {
     await fs.writeFile(testFilePath, initialContent);
 
     fileEditTool = new FileEditTool(
+      testDir,
       [testDir],
       model,
       AI_PROVIDERS.ANTHROPIC,

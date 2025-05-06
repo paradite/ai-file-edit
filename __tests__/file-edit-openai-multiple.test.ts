@@ -34,6 +34,7 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
     );
 
     fileEditTool = new FileEditTool(
+      testDir,
       [path.join(testDir, '1')],
       model,
       AI_PROVIDERS.OPENAI,

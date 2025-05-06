@@ -31,11 +31,13 @@ describe('File Edit Tool with Claude', () => {
     );
 
     fileEditTool = new FileEditTool(
+      testDir,
       [path.join(testDir, '1')],
       model,
       AI_PROVIDERS.ANTHROPIC,
       process.env.ANTHROPIC_API_KEY || '',
       [path.join(testDir, '1', 'edit-test.js')],
+      3,
     );
 
     // Test editing file in allowed directory
@@ -71,11 +73,13 @@ describe('File Edit Tool with Claude', () => {
     );
 
     fileEditTool = new FileEditTool(
+      testDir,
       [path.join(testDir, '1')],
       model,
       AI_PROVIDERS.ANTHROPIC,
       process.env.ANTHROPIC_API_KEY || '',
       [path.join(testDir, '1', 'edit-test.js')],
+      3,
     );
 
     // Test editing file in non-allowed directory
@@ -98,11 +102,13 @@ describe('File Edit Tool with Claude', () => {
     const newFilePath = path.join(testDir, '1', 'new-file.js');
 
     fileEditTool = new FileEditTool(
+      testDir,
       [path.join(testDir, '1')],
       model,
       AI_PROVIDERS.ANTHROPIC,
       process.env.ANTHROPIC_API_KEY || '',
       [path.join(testDir, '1', 'edit-test.js')],
+      3,
     );
 
     // Test creating a new file

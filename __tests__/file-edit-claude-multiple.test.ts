@@ -35,6 +35,7 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
     );
 
     fileEditTool = new FileEditTool(
+      testDir,
       [path.join(testDir, '1')],
       model,
       AI_PROVIDERS.ANTHROPIC,

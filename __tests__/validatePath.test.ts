@@ -27,71 +27,120 @@ describe('validatePath', () => {
     }
   });
 
-  test('should validate path within allowed directories', async () => {
-    const testFilePath = path.join(testDir, 'test.txt');
-    const validatedPath = await validatePath(testFilePath, allowedDirectories);
-    expect(validatedPath).toBe(path.resolve(testFilePath));
+  describe('absolute paths', () => {
+    test('should validate path within allowed directories', async () => {
+      const testFilePath = path.join(testDir, 'test.txt');
+      const validatedPath = await validatePath(testDir, testFilePath, allowedDirectories);
+      expect(validatedPath).toBe(path.resolve(testFilePath));
+    });
+
+    test('should throw error for path outside allowed directories', async () => {
+      const outsidePath = path.join(process.cwd(), 'outside.txt');
+      await expect(validatePath(process.cwd(), outsidePath, allowedDirectories)).rejects.toThrow(
+        'Access denied - path outside allowed directories',
+      );
+    });
   });
 
-  test('should expand home directory path', async () => {
-    const homePath = '~/test.txt';
-    const expandedPath = path.join(os.homedir(), 'test.txt');
-    const validatedPath = await validatePath(homePath, [os.homedir()]);
-    expect(validatedPath).toBe(path.resolve(expandedPath));
+  describe('home directory paths', () => {
+    test('should expand home directory path', async () => {
+      const homePath = '~/test.txt';
+      const expandedPath = path.join(os.homedir(), 'test.txt');
+      const validatedPath = await validatePath(os.homedir(), homePath, [os.homedir()]);
+      expect(validatedPath).toBe(path.resolve(expandedPath));
+    });
   });
 
-  test('should throw error for path outside allowed directories', async () => {
-    const outsidePath = path.join(process.cwd(), 'outside.txt');
-    await expect(validatePath(outsidePath, allowedDirectories)).rejects.toThrow(
-      'Access denied - path outside allowed directories',
-    );
+  describe('relative paths', () => {
+    test('should handle relative path with ./ prefix', async () => {
+      const parentDir = path.join(testDir, 'parent');
+      const relativePath = './child/file.txt';
+      const expectedPath = path.join(parentDir, 'child', 'file.txt');
+
+      await fs.mkdir(path.join(parentDir, 'child'), {recursive: true});
+      const validatedPath = await validatePath(parentDir, relativePath, allowedDirectories);
+      expect(validatedPath).toBe(path.resolve(expectedPath));
+    });
+
+    test('should handle relative path without ./ prefix', async () => {
+      const parentDir = path.join(testDir, 'parent');
+      const relativePath = 'child/file.txt';
+      const expectedPath = path.join(parentDir, 'child', 'file.txt');
+
+      await fs.mkdir(path.join(parentDir, 'child'), {recursive: true});
+      const validatedPath = await validatePath(parentDir, relativePath, allowedDirectories);
+      expect(validatedPath).toBe(path.resolve(expectedPath));
+    });
+
+    test('should handle relative path with parent directory traversal', async () => {
+      const parentDir = path.join(testDir, 'parent');
+      const relativePath = '../sibling/file.txt';
+      const expectedPath = path.join(testDir, 'sibling', 'file.txt');
+
+      await fs.mkdir(parentDir, {recursive: true});
+      await fs.mkdir(path.join(testDir, 'sibling'), {recursive: true});
+      const validatedPath = await validatePath(parentDir, relativePath, allowedDirectories);
+      expect(validatedPath).toBe(path.resolve(expectedPath));
+    });
+
+    test('should throw error for relative path that resolves outside allowed directories', async () => {
+      const parentDir = path.join(testDir, 'parent');
+      const relativePath = '../../outside.txt';
+
+      await fs.mkdir(parentDir, {recursive: true});
+      await expect(validatePath(parentDir, relativePath, allowedDirectories)).rejects.toThrow(
+        'Access denied - path outside allowed directories',
+      );
+    });
   });
 
-  test('should handle symlinks within allowed directories pointing to allowed directories', async () => {
-    const targetPath = path.join(testDir, 'target.txt');
-    const symlinkPath = path.join(testDir, 'symlink.txt');
+  describe('symlinks', () => {
+    test('should handle symlinks within allowed directories pointing to allowed directories', async () => {
+      const targetPath = path.join(testDir, 'target.txt');
+      const symlinkPath = path.join(testDir, 'symlink.txt');
 
-    // Create target file
-    await fs.writeFile(targetPath, 'test content');
-    await fs.symlink(targetPath, symlinkPath);
+      await fs.writeFile(targetPath, 'test content');
+      await fs.symlink(targetPath, symlinkPath);
 
-    const validatedPath = await validatePath(symlinkPath, allowedDirectories);
-    expect(validatedPath).toBe(path.resolve(targetPath));
+      const validatedPath = await validatePath(testDir, symlinkPath, allowedDirectories);
+      expect(validatedPath).toBe(path.resolve(targetPath));
 
-    // Clean up
-    await fs.unlink(symlinkPath);
-    await fs.unlink(targetPath);
+      // Clean up
+      await fs.unlink(symlinkPath);
+      await fs.unlink(targetPath);
+    });
+
+    test('should allow symlinks within allowed directories pointing outside', async () => {
+      const outsidePath = path.join(process.cwd(), 'outside.txt');
+      const symlinkPath = path.join(testDir, 'symlink.txt');
+
+      await fs.writeFile(outsidePath, 'test content');
+      await fs.symlink(outsidePath, symlinkPath);
+
+      const validatedPath = await validatePath(testDir, symlinkPath, allowedDirectories);
+      expect(validatedPath).toBe(path.resolve(outsidePath));
+
+      // Clean up
+      await fs.unlink(symlinkPath);
+      await fs.unlink(outsidePath);
+    });
   });
 
-  test('should allow symlinks within allowed directories pointing outside', async () => {
-    const outsidePath = path.join(process.cwd(), 'outside.txt');
-    const symlinkPath = path.join(testDir, 'symlink.txt');
+  describe('file existence', () => {
+    test('should handle non-existent files with valid parent directory', async () => {
+      const newDir = path.join(testDir, 'new');
+      await fs.mkdir(newDir, {recursive: true});
+      const newFilePath = path.join(newDir, 'file.txt');
+      const validatedPath = await validatePath(newDir, newFilePath, allowedDirectories);
+      expect(validatedPath).toBe(path.resolve(newFilePath));
+    });
 
-    // Create target file outside allowed directories
-    await fs.writeFile(outsidePath, 'test content');
-    await fs.symlink(outsidePath, symlinkPath);
-
-    const validatedPath = await validatePath(symlinkPath, allowedDirectories);
-    expect(validatedPath).toBe(path.resolve(outsidePath));
-
-    // Clean up
-    await fs.unlink(symlinkPath);
-    await fs.unlink(outsidePath);
-  });
-
-  test('should handle non-existent files with valid parent directory', async () => {
-    const newDir = path.join(testDir, 'new');
-    await fs.mkdir(newDir, {recursive: true});
-    const newFilePath = path.join(newDir, 'file.txt');
-    const validatedPath = await validatePath(newFilePath, allowedDirectories);
-    expect(validatedPath).toBe(path.resolve(newFilePath));
-  });
-
-  test('should throw error for non-existent parent directory', async () => {
-    const invalidPath = path.join(testDir, 'nonexistent', 'file.txt');
-    await expect(validatePath(invalidPath, allowedDirectories)).rejects.toThrow(
-      'Parent directory does not exist',
-    );
+    test('should throw error for non-existent parent directory', async () => {
+      const invalidPath = path.join(testDir, 'nonexistent', 'file.txt');
+      await expect(validatePath(testDir, invalidPath, allowedDirectories)).rejects.toThrow(
+        'Parent directory does not exist',
+      );
+    });
   });
 
   // Windows-specific tests
@@ -99,42 +148,42 @@ describe('validatePath', () => {
     const windowsTempDir = os.tmpdir();
     const driveLetter = windowsTempDir.split(':')[0];
 
-    test('should handle Windows absolute paths with drive letters', async () => {
-      const testDir = `${driveLetter}:\\test_validate_path`;
-      await fs.mkdir(testDir, {recursive: true});
+    describe('Windows paths', () => {
+      test('should handle Windows absolute paths with drive letters', async () => {
+        const testDir = `${driveLetter}:\\test_validate_path`;
+        await fs.mkdir(testDir, {recursive: true});
 
-      const windowsPath = `${driveLetter}:\\test_validate_path\\file.txt`;
-      const allowedDirs = [`${driveLetter}:\\`];
-      const validatedPath = await validatePath(windowsPath, allowedDirs);
-      expect(validatedPath).toBe(path.resolve(windowsPath));
-    });
+        const windowsPath = `${driveLetter}:\\test_validate_path\\file.txt`;
+        const allowedDirs = [`${driveLetter}:\\`];
+        const validatedPath = await validatePath(testDir, windowsPath, allowedDirs);
+        expect(validatedPath).toBe(path.resolve(windowsPath));
+      });
 
-    test('should handle Windows paths with spaces', async () => {
-      const testDir = `${driveLetter}:\\test folder`;
-      await fs.mkdir(testDir, {recursive: true});
+      test('should handle Windows paths with spaces', async () => {
+        const testDir = `${driveLetter}:\\test folder`;
+        await fs.mkdir(testDir, {recursive: true});
 
-      const spacePath = `${driveLetter}:\\test folder\\file.txt`;
-      const allowedDirs = [`${driveLetter}:\\`];
-      const validatedPath = await validatePath(spacePath, allowedDirs);
-      expect(validatedPath).toBe(path.resolve(spacePath));
-    });
+        const spacePath = `${driveLetter}:\\test folder\\file.txt`;
+        const allowedDirs = [`${driveLetter}:\\`];
+        const validatedPath = await validatePath(testDir, spacePath, allowedDirs);
+        expect(validatedPath).toBe(path.resolve(spacePath));
+      });
 
-    test('should handle Windows TEMP paths', async () => {
-      const testDir = path.join(windowsTempDir, 'test_validate_path');
-      // Ensure the directory exists before testing
-      await fs.mkdir(testDir, {recursive: true});
+      test('should handle Windows TEMP paths', async () => {
+        const testDir = path.join(windowsTempDir, 'test_validate_path');
+        await fs.mkdir(testDir, {recursive: true});
 
-      // Create a file to ensure the path is valid
-      const tempPath = path.join(testDir, 'file.txt');
-      await fs.writeFile(tempPath, 'test content');
+        const tempPath = path.join(testDir, 'file.txt');
+        await fs.writeFile(tempPath, 'test content');
 
-      const allowedDirs = [windowsTempDir];
-      const validatedPath = await validatePath(tempPath, allowedDirs);
-      expect(validatedPath).toBe(path.resolve(tempPath));
+        const allowedDirs = [windowsTempDir];
+        const validatedPath = await validatePath(testDir, tempPath, allowedDirs);
+        expect(validatedPath).toBe(path.resolve(tempPath));
 
-      // Clean up
-      await fs.unlink(tempPath);
-      await fs.rmdir(testDir);
+        // Clean up
+        await fs.unlink(tempPath);
+        await fs.rmdir(testDir);
+      });
     });
   }
 });

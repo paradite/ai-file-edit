@@ -44,7 +44,10 @@ export class FileEditTool {
   private provider: AI_PROVIDER_TYPE;
   private fileContext: string[] = [];
   private maxToolUseRounds: number;
+  private parentDir: string;
+
   constructor(
+    parentDir: string,
     allowedDirectories: string[] = [],
     modelName: ModelEnum,
     provider: AI_PROVIDER_TYPE,
@@ -52,6 +55,7 @@ export class FileEditTool {
     fileContext: string[] = [],
     maxToolUseRounds: number = 3,
   ) {
+    this.parentDir = parentDir;
     this.allowedDirectories = allowedDirectories;
     this.modelName = modelName;
     this.provider = provider;
@@ -156,14 +160,18 @@ export class FileEditTool {
         };
       }
       try {
-        const validPath = await validatePath(parsed.data.path, this.allowedDirectories);
+        const validPath = await validatePath(
+          this.parentDir,
+          parsed.data.path,
+          this.allowedDirectories,
+        );
         const {
           response,
           rawDiff: newRawDiff,
           newFileCreated: resultNewFileCreated,
           validEdits,
           reverseDiff: newReverseDiff,
-        } = await applyFileEdits(validPath, parsed.data.edits, parsed.data.content);
+        } = await applyFileEdits(this.parentDir, validPath, parsed.data.edits, parsed.data.content);
         result = response;
         if (validEdits) {
           rawDiff = {[validPath]: newRawDiff};
