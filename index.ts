@@ -2,7 +2,7 @@ import {Anthropic} from '@anthropic-ai/sdk';
 import {MessageParam, Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import fs from 'fs/promises';
 import {OpenAI} from 'openai';
-import {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
+import {ChatCompletionMessage, ChatCompletionMessageParam} from 'openai/resources/chat/completions';
 import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
@@ -10,11 +10,12 @@ import {validatePath, applyFileEdits, applyReversePatch} from './utils/fileUtils
 
 export type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
 
-const followupTemplate = (toolResults: string) => `Tool call returned the following result:
+const followupTemplateNewFile = `Based on the tool call result, check if you need to perform any follow up actions via the tools.
 
-${toolResults}
+If you need to perform follow up actions, call the appropriate tool. If not, respond with "No follow up actions needed".
+`;
 
-Check if you need to perform any follow up actions via the tools.
+const followupTemplateEdit = `Based on the tool call result and the updated file contents, check if you need to perform any follow up actions via the tools.
 
 If you need to perform follow up actions, call the appropriate tool. If not, respond with "No follow up actions needed".
 `;
@@ -121,8 +122,8 @@ export class FileEditTool {
     reverseDiff?: Record<string, string>;
     newFileCreated: boolean;
   }> {
-    const finalText = [];
-    const toolResults = [];
+    const finalText: string[] = [];
+    const toolResults: string[] = [];
     let finalStatus: ToolCallStatus = 'success';
     let rawDiff: Record<string, string> | undefined;
     let reverseDiff: Record<string, string> | undefined;
@@ -209,27 +210,38 @@ export class FileEditTool {
       : '';
 
     if (newFileCreated) {
+      const assistantMessage = {
+        role: 'assistant' as const,
+        content: `[Tool call completed: New file has been created]\n\n${result}`,
+      };
+      messages.push(assistantMessage);
+      finalText.push(assistantMessage.content);
+
       const followup = {
-        role: 'user',
-        content: `[New file has been created]\n\n${result}\n\n${followupTemplate(result)}`,
-      } as MessageParam;
+        role: 'user' as const,
+        content: followupTemplateNewFile,
+      };
       messages.push(followup);
-      finalText.push(`[Follow up: ${followup.content}]`);
+      finalText.push(followup.content);
       return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
     } else {
+      const assistantMessage = {
+        role: 'assistant' as const,
+        content: `[Tool call completed: ${result}]\n\n[New file content]\n\n${queryWithFileContents}`,
+      };
+      messages.push(assistantMessage);
+      finalText.push(assistantMessage.content);
       const followup = {
-        role: 'user',
-        content: `[Files have been updated after the tool call]\n\n${queryWithFileContents}\n\n${followupTemplate(
-          result,
-        )}`,
-      } as MessageParam;
+        role: 'user' as const,
+        content: followupTemplateEdit,
+      };
       messages.push(followup);
-      finalText.push(`[Follow up: ${followup.content}]`);
+      finalText.push(followup.content);
       return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
     }
   }
 
-  private async handleAnthropicToolUse(
+  private async handleToolResponseAnthropic(
     modelName: ModelEnum,
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
@@ -284,7 +296,7 @@ export class FileEditTool {
             finalStatus: nextRoundFinalStatus,
             rawDiff: nextRoundRawDiff,
             reverseDiff: nextRoundReverseDiff,
-          } = await this.handleAnthropicToolUse(
+          } = await this.handleToolResponseAnthropic(
             modelName,
             content.name,
             content.input as {[x: string]: unknown} | undefined,
@@ -313,44 +325,13 @@ export class FileEditTool {
     return {finalText, toolResults, finalStatus, rawDiff, reverseDiff};
   }
 
-  private async handleOpenAIToolUse(
+  private async handleToolResponseOpenAI(
     modelName: ModelEnum,
-    toolName: string,
-    toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
-    round: number = 0,
-  ): Promise<{
-    finalText: string[];
-    toolResults: string[];
-    finalStatus: ToolCallStatus;
-    rawDiff?: Record<string, string>;
-    reverseDiff?: Record<string, string>;
-  }> {
-    const {
-      finalText,
-      toolResults,
-      finalStatus: initialStatus,
-      rawDiff: initialRawDiff,
-      reverseDiff: initialReverseDiff,
-    } = await this.handleToolUse(toolName, toolArgs, messages);
-
-    if (initialStatus !== 'success') {
-      return {
-        finalText,
-        toolResults,
-        finalStatus: initialStatus,
-        rawDiff: initialRawDiff,
-        reverseDiff: initialReverseDiff,
-      };
-    }
-
-    let finalStatus: ToolCallStatus = initialStatus;
-    let rawDiff = initialRawDiff;
-    let reverseDiff = initialReverseDiff;
-
+  ): Promise<ChatCompletionMessage> {
     const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
-    const response = await this.openai?.chat.completions.create({
+    const response = await this.openai!.chat.completions.create({
       model: modelName,
       messages: openAIMessages,
       tools: this.tools.map(tool => ({
@@ -364,48 +345,8 @@ export class FileEditTool {
     });
 
     // Handle the response content
-    const message = response?.choices[0].message;
-    if (message?.content) {
-      finalText.push(message.content);
-    }
-
-    if (message?.tool_calls) {
-      for (const toolCall of message.tool_calls) {
-        if (round < this.maxToolUseRounds) {
-          // If we get a tool use response and we haven't reached the round limit
-          const {
-            finalText: nextRoundFinalText,
-            toolResults: nextRoundToolResults,
-            finalStatus: nextRoundFinalStatus,
-            rawDiff: nextRoundRawDiff,
-            reverseDiff: nextRoundReverseDiff,
-          } = await this.handleOpenAIToolUse(
-            modelName,
-            toolCall.function.name,
-            JSON.parse(toolCall.function.arguments),
-            messages,
-            round + 1,
-          );
-          finalText.push(...nextRoundFinalText);
-          toolResults.push(...nextRoundToolResults);
-          finalStatus = nextRoundFinalStatus;
-          if (nextRoundRawDiff) {
-            rawDiff = {...rawDiff, ...nextRoundRawDiff};
-          }
-          if (nextRoundReverseDiff) {
-            reverseDiff = {...reverseDiff, ...nextRoundReverseDiff};
-          }
-        } else {
-          // If we get a tool use response but we've reached the round limit
-          finalText.push(
-            `[Maximum tool use rounds (${this.maxToolUseRounds}) reached. Stopping further tool calls.]`,
-          );
-          finalStatus = 'retry_limit_reached';
-        }
-      }
-    }
-
-    return {finalText, toolResults, finalStatus, rawDiff, reverseDiff};
+    const message = response.choices[0].message;
+    return message;
   }
 
   private convertAnthropicMessageToOpenAI(msg: MessageParam): ChatCompletionMessageParam {
@@ -445,15 +386,17 @@ export class FileEditTool {
 
     const messageContent = queryWithFileContents + '\n\n' + query;
 
-    const messages: MessageParam[] = [
+    const globalMessages: MessageParam[] = [
       {
         role: 'user',
         content: messageContent,
       },
     ];
 
+    let round = 1;
+
     if (this.provider === AI_PROVIDERS.OPENAI) {
-      const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
+      const openAIMessages = globalMessages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
       const response = await this.openai?.chat.completions.create({
         model: this.modelName,
@@ -468,28 +411,28 @@ export class FileEditTool {
         })),
       });
 
-      const finalText = [];
-      const toolResults = [];
+      const finalText: string[] = [];
+      const toolResults: string[] = [];
 
-      const message = response?.choices[0].message;
-      if (message?.content) {
-        finalText.push(message.content);
+      const initMessage = response?.choices[0].message;
+      if (initMessage?.content) {
+        finalText.push(initMessage.content);
       }
 
-      if (message?.tool_calls) {
-        for (const toolCall of message.tool_calls) {
+      if (initMessage?.tool_calls) {
+        for (const toolCall of initMessage.tool_calls) {
           const {
             finalText: toolFinalText,
             toolResults: newToolResults,
             finalStatus: toolFinalStatus,
             rawDiff: newRawDiff,
             reverseDiff: newReverseDiff,
-          } = await this.handleOpenAIToolUse(
-            this.modelName,
+          } = await this.handleToolUse(
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments),
-            messages,
+            globalMessages,
           );
+
           finalText.push(...toolFinalText);
           toolResults.push(...newToolResults);
           finalStatus = toolFinalStatus;
@@ -507,12 +450,35 @@ export class FileEditTool {
         finalStatus = 'no_tool_calls';
       }
 
+      let newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages);
+      while (newMessage.tool_calls && round < this.maxToolUseRounds) {
+        for (const toolCall of newMessage.tool_calls) {
+          const {
+            finalText: toolFinalText,
+            toolResults: newToolResults,
+            finalStatus: toolFinalStatus,
+          } = await this.handleToolUse(
+            toolCall.function.name,
+            JSON.parse(toolCall.function.arguments),
+            globalMessages,
+          );
+
+          finalText.push(...toolFinalText);
+          toolResults.push(...newToolResults);
+          finalStatus = toolFinalStatus;
+          toolCallCount++;
+        }
+
+        newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages);
+        round++;
+      }
+
       return {finalText, toolResults, finalStatus, toolCallCount, rawDiff, reverseDiff};
     } else if (this.provider === AI_PROVIDERS.ANTHROPIC) {
       const response = await this.anthropic?.messages.create({
         model: this.modelName,
         max_tokens: 1000,
-        messages,
+        messages: globalMessages,
         tools: this.tools,
       });
 
@@ -529,11 +495,11 @@ export class FileEditTool {
             finalStatus: toolFinalStatus,
             rawDiff: newRawDiff,
             reverseDiff: newReverseDiff,
-          } = await this.handleAnthropicToolUse(
+          } = await this.handleToolResponseAnthropic(
             this.modelName,
             content.name,
             content.input as {[x: string]: unknown} | undefined,
-            messages,
+            globalMessages,
           );
           finalText.push(...toolFinalText);
           toolResults.push(...newToolResults);
