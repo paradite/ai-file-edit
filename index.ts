@@ -54,7 +54,7 @@ export class FileEditTool {
     provider: AI_PROVIDER_TYPE,
     apiKey: string,
     fileContext: string[] = [],
-    maxToolUseRounds: number = 3,
+    maxToolUseRounds: number = 5,
   ) {
     this.parentDir = parentDir;
     this.allowedDirectories = allowedDirectories;
