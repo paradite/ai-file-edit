@@ -113,6 +113,7 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
     // console.log('Tool results:', response.toolResults.join('\n'));
     expect(response.finalText.join('\n')).toContain('Successfully updated file');
     expect(response.finalStatus).toBe('success');
+    expect(response.toolCallRounds).toBeLessThanOrEqual(2);
     expect(response.toolCallCount).toBeGreaterThanOrEqual(5);
     expect(response.toolCallCount).toBeLessThanOrEqual(6);
 

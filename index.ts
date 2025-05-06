@@ -243,86 +243,19 @@ export class FileEditTool {
 
   private async handleToolResponseAnthropic(
     modelName: ModelEnum,
-    toolName: string,
-    toolArgs: {[x: string]: unknown} | undefined,
     messages: MessageParam[],
-    round: number = 0,
-  ): Promise<{
-    finalText: string[];
-    toolResults: string[];
-    finalStatus: ToolCallStatus;
-    rawDiff?: Record<string, string>;
-    reverseDiff?: Record<string, string>;
-  }> {
-    const {
-      finalText,
-      toolResults,
-      finalStatus: initialStatus,
-      rawDiff: initialRawDiff,
-      reverseDiff: initialReverseDiff,
-    } = await this.handleToolUse(toolName, toolArgs, messages);
-
-    if (initialStatus !== 'success') {
-      return {
-        finalText,
-        toolResults,
-        finalStatus: initialStatus,
-        rawDiff: initialRawDiff,
-        reverseDiff: initialReverseDiff,
-      };
-    }
-
-    let finalStatus: ToolCallStatus = initialStatus;
-    let rawDiff = initialRawDiff;
-    let reverseDiff = initialReverseDiff;
-
+  ): Promise<MessageParam> {
     const response = await this.anthropic?.messages.create({
       model: modelName,
-      max_tokens: 1000,
+      max_tokens: 8192,
       messages,
       tools: this.tools,
     });
 
-    // Handle the response content
-    for (const content of response?.content || []) {
-      if (content.type === 'text') {
-        finalText.push(content.text);
-      } else if (content.type === 'tool_use') {
-        if (round < this.maxToolUseRounds) {
-          // If we get a tool use response and we haven't reached the round limit
-          const {
-            finalText: nextRoundFinalText,
-            toolResults: nextRoundToolResults,
-            finalStatus: nextRoundFinalStatus,
-            rawDiff: nextRoundRawDiff,
-            reverseDiff: nextRoundReverseDiff,
-          } = await this.handleToolResponseAnthropic(
-            modelName,
-            content.name,
-            content.input as {[x: string]: unknown} | undefined,
-            messages,
-            round + 1,
-          );
-          finalText.push(...nextRoundFinalText);
-          toolResults.push(...nextRoundToolResults);
-          finalStatus = nextRoundFinalStatus;
-          if (nextRoundRawDiff) {
-            rawDiff = {...rawDiff, ...nextRoundRawDiff};
-          }
-          if (nextRoundReverseDiff) {
-            reverseDiff = {...reverseDiff, ...nextRoundReverseDiff};
-          }
-        } else {
-          // If we get a tool use response but we've reached the round limit
-          finalText.push(
-            `[Maximum tool use rounds (${this.maxToolUseRounds}) reached. Stopping further tool calls.]`,
-          );
-          finalStatus = 'retry_limit_reached';
-        }
-      }
-    }
-
-    return {finalText, toolResults, finalStatus, rawDiff, reverseDiff};
+    return {
+      role: 'assistant',
+      content: response?.content || [],
+    };
   }
 
   private async handleToolResponseOpenAI(
@@ -367,6 +300,7 @@ export class FileEditTool {
     toolResults: string[];
     finalStatus: ToolCallStatus;
     toolCallCount: number;
+    toolCallRounds: number;
     rawDiff?: Record<string, string>;
     reverseDiff?: Record<string, string>;
   }> {
@@ -393,7 +327,7 @@ export class FileEditTool {
       },
     ];
 
-    let round = 1;
+    let toolCallRounds = 0;
 
     if (this.provider === AI_PROVIDERS.OPENAI) {
       const openAIMessages = globalMessages.map(this.convertAnthropicMessageToOpenAI.bind(this));
@@ -420,6 +354,7 @@ export class FileEditTool {
       }
 
       if (initMessage?.tool_calls) {
+        toolCallRounds++;
         for (const toolCall of initMessage.tool_calls) {
           const {
             finalText: toolFinalText,
@@ -451,7 +386,7 @@ export class FileEditTool {
       }
 
       let newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages);
-      while (newMessage.tool_calls && round < this.maxToolUseRounds) {
+      while (newMessage.tool_calls && toolCallRounds < this.maxToolUseRounds) {
         for (const toolCall of newMessage.tool_calls) {
           const {
             finalText: toolFinalText,
@@ -470,61 +405,139 @@ export class FileEditTool {
         }
 
         newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages);
-        round++;
+        toolCallRounds++;
       }
 
-      return {finalText, toolResults, finalStatus, toolCallCount, rawDiff, reverseDiff};
+      if (toolCallRounds >= this.maxToolUseRounds && newMessage.tool_calls) {
+        finalStatus = 'retry_limit_reached';
+      }
+
+      return {
+        finalText,
+        toolResults,
+        finalStatus,
+        toolCallCount,
+        toolCallRounds,
+        rawDiff,
+        reverseDiff,
+      };
     } else if (this.provider === AI_PROVIDERS.ANTHROPIC) {
-      const response = await this.anthropic?.messages.create({
-        model: this.modelName,
-        max_tokens: 1000,
-        messages: globalMessages,
-        tools: this.tools,
-      });
+      const finalText: string[] = [];
+      const toolResults: string[] = [];
 
-      const finalText = [];
-      const toolResults = [];
-
-      for (const content of response?.content || []) {
-        if (content.type === 'text') {
-          finalText.push(content.text);
-        } else if (content.type === 'tool_use') {
-          const {
-            finalText: toolFinalText,
-            toolResults: newToolResults,
-            finalStatus: toolFinalStatus,
-            rawDiff: newRawDiff,
-            reverseDiff: newReverseDiff,
-          } = await this.handleToolResponseAnthropic(
-            this.modelName,
-            content.name,
-            content.input as {[x: string]: unknown} | undefined,
-            globalMessages,
-          );
-          finalText.push(...toolFinalText);
-          toolResults.push(...newToolResults);
-          finalStatus = toolFinalStatus;
-          toolCallCount++;
-          if (newRawDiff) {
-            rawDiff = {...rawDiff, ...newRawDiff};
+      let message = await this.handleToolResponseAnthropic(this.modelName, globalMessages);
+      if (Array.isArray(message.content)) {
+        for (const content of message.content) {
+          if (typeof content === 'string') {
+            finalText.push(content);
+          } else if (content.type === 'text') {
+            finalText.push(content.text);
           }
-          if (newReverseDiff) {
-            reverseDiff = {...reverseDiff, ...newReverseDiff};
+        }
+      }
+
+      if (Array.isArray(message.content)) {
+        for (const content of message.content) {
+          if (typeof content !== 'string' && content.type === 'tool_use') {
+            const {
+              finalText: toolFinalText,
+              toolResults: newToolResults,
+              finalStatus: toolFinalStatus,
+              rawDiff: newRawDiff,
+              reverseDiff: newReverseDiff,
+            } = await this.handleToolUse(
+              content.name,
+              content.input as {[x: string]: unknown} | undefined,
+              globalMessages,
+            );
+
+            finalText.push(...toolFinalText);
+            toolResults.push(...newToolResults);
+            finalStatus = toolFinalStatus;
+            toolCallCount++;
+            if (newRawDiff) {
+              rawDiff = {...rawDiff, ...newRawDiff};
+            }
+            if (newReverseDiff) {
+              reverseDiff = {...reverseDiff, ...newReverseDiff};
+            }
           }
         }
       }
 
       if (toolCallCount === 0) {
         finalStatus = 'no_tool_calls';
+      } else {
+        toolCallRounds++;
       }
 
-      return {finalText, toolResults, finalStatus, toolCallCount, rawDiff, reverseDiff};
+      let newMessage = await this.handleToolResponseAnthropic(this.modelName, globalMessages);
+      while (
+        Array.isArray(newMessage.content) &&
+        newMessage.content.some(
+          content => typeof content !== 'string' && content.type === 'tool_use',
+        ) &&
+        toolCallRounds < this.maxToolUseRounds
+      ) {
+        for (const content of newMessage.content) {
+          if (typeof content !== 'string' && content.type === 'tool_use') {
+            const {
+              finalText: toolFinalText,
+              toolResults: newToolResults,
+              finalStatus: toolFinalStatus,
+              rawDiff: newRawDiff,
+              reverseDiff: newReverseDiff,
+            } = await this.handleToolUse(
+              content.name,
+              content.input as {[x: string]: unknown} | undefined,
+              globalMessages,
+            );
+
+            finalText.push(...toolFinalText);
+            toolResults.push(...newToolResults);
+            finalStatus = toolFinalStatus;
+            toolCallCount++;
+            if (newRawDiff) {
+              rawDiff = {...rawDiff, ...newRawDiff};
+            }
+            if (newReverseDiff) {
+              reverseDiff = {...reverseDiff, ...newReverseDiff};
+            }
+          }
+        }
+
+        newMessage = await this.handleToolResponseAnthropic(this.modelName, globalMessages);
+        toolCallRounds++;
+      }
+
+      if (
+        toolCallRounds >= this.maxToolUseRounds &&
+        Array.isArray(newMessage.content) &&
+        newMessage.content.some(
+          content => typeof content !== 'string' && content.type === 'tool_use',
+        )
+      ) {
+        finalStatus = 'retry_limit_reached';
+      }
+
+      return {
+        finalText,
+        toolResults,
+        finalStatus,
+        toolCallCount,
+        toolCallRounds,
+        rawDiff,
+        reverseDiff,
+      };
     } else {
       return {
         finalText: [`[Unsupported model: ${this.modelName}]`],
         toolResults: [],
         finalStatus: 'failure',
         toolCallCount: 0,
+        toolCallRounds: 0,
+        rawDiff: undefined,
+        reverseDiff: undefined,
       };
     }
   }
