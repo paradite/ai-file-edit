@@ -41,6 +41,7 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
       AI_PROVIDERS.ANTHROPIC,
       process.env.ANTHROPIC_API_KEY || '',
       [path.join(testDir, '1', 'file1.js'), path.join(testDir, '1', 'file2.js')],
+      5,
     );
 
     // Test editing multiple files in allowed directory
@@ -48,6 +49,7 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
       `update both ${file1Path} and ${file2Path} to change the arithmetic operations to multiplication. 
        In ${file1Path}, change add to multiply and update the function calls.
        In ${file2Path}, change subtract to multiply and update the function calls.`,
+      true,
     );
 
     // console.log('Tool results:', response.toolResults.join('\n'));

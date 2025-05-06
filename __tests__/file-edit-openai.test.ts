@@ -7,7 +7,7 @@ const model = ModelEnum['gpt-4.1'];
 
 jest.retryTimes(1);
 
-describe.skip('File Edit Tool with OpenAI', () => {
+describe('File Edit Tool with OpenAI', () => {
   let fileEditTool: FileEditTool;
   const testDir = path.join(process.cwd(), 'sample-openai');
 

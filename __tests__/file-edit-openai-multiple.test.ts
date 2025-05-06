@@ -72,6 +72,7 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
        In file4.js, replace the power function with multiply and update its implementation to use * operator.
        In file5.js, replace the modulo function with multiply and update its implementation to use * operator.
        Keep the same function parameters and console.log statements, just change the operation.`,
+      true,
     );
 
     // Check the response contains expected diffs for all three files

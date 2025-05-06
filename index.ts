@@ -244,13 +244,23 @@ export class FileEditTool {
   private async handleToolResponseAnthropic(
     modelName: ModelEnum,
     messages: MessageParam[],
+    debug: boolean,
   ): Promise<MessageParam> {
+    if (debug) {
+      console.log('Sending Anthropic followup message');
+      console.log(JSON.stringify(messages, null, 2));
+    }
     const response = await this.anthropic?.messages.create({
       model: modelName,
       max_tokens: 8192,
       messages,
       tools: this.tools,
     });
+
+    if (debug) {
+      console.log('Received Anthropic followup response');
+      console.log(JSON.stringify(response, null, 2));
+    }
 
     return {
       role: 'assistant',
@@ -261,9 +271,13 @@ export class FileEditTool {
   private async handleToolResponseOpenAI(
     modelName: ModelEnum,
     messages: MessageParam[],
+    debug: boolean,
   ): Promise<ChatCompletionMessage> {
     const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
+    if (debug) {
+      console.log('Sending followup OpenAI messages');
+    }
     const response = await this.openai!.chat.completions.create({
       model: modelName,
       messages: openAIMessages,
@@ -276,6 +290,9 @@ export class FileEditTool {
         },
       })),
     });
+    if (debug) {
+      console.log('Received followup OpenAI response');
+    }
 
     // Handle the response content
     const message = response.choices[0].message;
@@ -295,7 +312,10 @@ export class FileEditTool {
     };
   }
 
-  async processQuery(query: string): Promise<{
+  async processQuery(
+    query: string,
+    debug: boolean = false,
+  ): Promise<{
     finalText: string[];
     toolResults: string[];
     finalStatus: ToolCallStatus;
@@ -308,6 +328,10 @@ export class FileEditTool {
     let finalStatus: ToolCallStatus = 'success';
     let rawDiff: Record<string, string> | undefined;
     let reverseDiff: Record<string, string> | undefined;
+
+    if (debug) {
+      console.log('Processing query:', query);
+    }
 
     await this.refreshFileContents();
 
@@ -332,6 +356,9 @@ export class FileEditTool {
     if (this.provider === AI_PROVIDERS.OPENAI) {
       const openAIMessages = globalMessages.map(this.convertAnthropicMessageToOpenAI.bind(this));
 
+      if (debug) {
+        console.log('Sending OpenAI initial message');
+      }
       const response = await this.openai?.chat.completions.create({
         model: this.modelName,
         messages: openAIMessages,
@@ -353,9 +380,16 @@ export class FileEditTool {
         finalText.push(initMessage.content);
       }
 
+      if (debug) {
+        console.log('Received OpenAI initial response:', initMessage);
+      }
+
       if (initMessage?.tool_calls) {
         toolCallRounds++;
         for (const toolCall of initMessage.tool_calls) {
+          if (debug) {
+            console.log('Processing tool call:', toolCall);
+          }
           const {
             finalText: toolFinalText,
             toolResults: newToolResults,
@@ -385,9 +419,12 @@ export class FileEditTool {
         finalStatus = 'no_tool_calls';
       }
 
-      let newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages);
+      let newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages, debug);
       while (newMessage.tool_calls && toolCallRounds < this.maxToolUseRounds) {
         for (const toolCall of newMessage.tool_calls) {
+          if (debug) {
+            console.log('Processing tool call:', toolCall);
+          }
           const {
             finalText: toolFinalText,
             toolResults: newToolResults,
@@ -404,7 +441,7 @@ export class FileEditTool {
           toolCallCount++;
         }
 
-        newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages);
+        newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages, debug);
         toolCallRounds++;
       }
 
@@ -425,7 +462,17 @@ export class FileEditTool {
       const finalText: string[] = [];
       const toolResults: string[] = [];
 
-      let message = await this.handleToolResponseAnthropic(this.modelName, globalMessages);
+      if (debug) {
+        console.log('Sending Anthropic initial message');
+      }
+
+      const message = await this.anthropic!.messages.create({
+        model: this.modelName,
+        max_tokens: 8192,
+        messages: globalMessages,
+        tools: this.tools,
+      });
+
       if (Array.isArray(message.content)) {
         for (const content of message.content) {
           if (typeof content === 'string') {
@@ -439,6 +486,9 @@ export class FileEditTool {
       if (Array.isArray(message.content)) {
         for (const content of message.content) {
           if (typeof content !== 'string' && content.type === 'tool_use') {
+            if (debug) {
+              console.log('Processing tool call:', content.name);
+            }
             const {
               finalText: toolFinalText,
               toolResults: newToolResults,
@@ -471,7 +521,11 @@ export class FileEditTool {
         toolCallRounds++;
       }
 
-      let newMessage = await this.handleToolResponseAnthropic(this.modelName, globalMessages);
+      let newMessage = await this.handleToolResponseAnthropic(
+        this.modelName,
+        globalMessages,
+        debug,
+      );
       while (
         Array.isArray(newMessage.content) &&
         newMessage.content.some(
@@ -481,6 +535,9 @@ export class FileEditTool {
       ) {
         for (const content of newMessage.content) {
           if (typeof content !== 'string' && content.type === 'tool_use') {
+            if (debug) {
+              console.log('Processing tool call:', content.name);
+            }
             const {
               finalText: toolFinalText,
               toolResults: newToolResults,
@@ -506,7 +563,7 @@ export class FileEditTool {
           }
         }
 
-        newMessage = await this.handleToolResponseAnthropic(this.modelName, globalMessages);
+        newMessage = await this.handleToolResponseAnthropic(this.modelName, globalMessages, debug);
         toolCallRounds++;
       }
 
