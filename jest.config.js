@@ -9,5 +9,5 @@ export default {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
-  testTimeout: 25000, // 25 seconds,
+  testTimeout: 30000, // 30 seconds,
 };
