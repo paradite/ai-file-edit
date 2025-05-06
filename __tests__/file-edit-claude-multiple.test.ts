@@ -8,7 +8,7 @@ const model = ModelEnum['claude-3-7-sonnet-20250219'];
 
 jest.retryTimes(1);
 
-describe.skip('File Edit Tool with Claude - Multiple Files', () => {
+describe('File Edit Tool with Claude - Multiple Files', () => {
   let fileEditTool: FileEditTool;
   const testDir = path.join(process.cwd(), 'sample-claude-multiple');
 
