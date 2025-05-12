@@ -1,12 +1,10 @@
-import {Anthropic} from '@anthropic-ai/sdk';
 import {MessageParam, Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import fs from 'fs/promises';
-import {OpenAI} from 'openai';
-import {ChatCompletionMessage, ChatCompletionMessageParam} from 'openai/resources/chat/completions';
 import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import {validatePath, applyFileEdits, applyReversePatch} from './utils/fileUtils.js';
+import {InputMessage, sendPrompt} from 'send-prompt';
 
 export type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
 
@@ -36,8 +34,8 @@ const EditFileArgsSchema = z.object({
 });
 
 export class FileEditTool {
-  private anthropic: Anthropic | null = null;
-  private openai: OpenAI | null = null;
+  private anthropic: {apiKey: string} | null = null;
+  private openai: {apiKey: string} | null = null;
   private allowedDirectories: string[] = [];
   private fileContents: Record<string, string> = {};
   private tools: Tool[] = [];
@@ -64,15 +62,9 @@ export class FileEditTool {
     this.maxToolUseRounds = maxToolUseRounds;
 
     if (provider === AI_PROVIDERS.ANTHROPIC) {
-      this.anthropic = new Anthropic({
-        apiKey,
-        dangerouslyAllowBrowser: true,
-      });
+      this.anthropic = {apiKey};
     } else if (provider === AI_PROVIDERS.OPENAI) {
-      this.openai = new OpenAI({
-        apiKey,
-        dangerouslyAllowBrowser: true,
-      });
+      this.openai = {apiKey};
     }
 
     const editFileSchema = zodToJsonSchema(EditFileArgsSchema) as {
@@ -113,7 +105,8 @@ export class FileEditTool {
   private async handleToolUse(
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
-    messages: MessageParam[],
+    toolCallMessages: InputMessage[],
+    userTextMessages: InputMessage[],
   ): Promise<{
     finalText: string[];
     toolResults: string[];
@@ -210,107 +203,44 @@ export class FileEditTool {
       : '';
 
     if (newFileCreated) {
-      const assistantMessage = {
+      const toolResultMessage = {
         role: 'assistant' as const,
         content: `[Tool call completed: New file has been created]\n\n${result}`,
       };
-      messages.push(assistantMessage);
-      finalText.push(assistantMessage.content);
+      toolCallMessages.push(toolResultMessage);
+      userTextMessages.push({
+        role: 'user' as const,
+        content: toolResultMessage.content,
+      });
+      finalText.push(toolResultMessage.content);
 
       const followup = {
         role: 'user' as const,
         content: followupTemplateNewFile,
       };
-      messages.push(followup);
+      toolCallMessages.push(followup);
       finalText.push(followup.content);
+
       return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
     } else {
       const assistantMessage = {
         role: 'assistant' as const,
         content: `[Tool call completed: ${result}]\n\n[New file content]\n\n${queryWithFileContents}`,
       };
-      messages.push(assistantMessage);
+      toolCallMessages.push(assistantMessage);
+      userTextMessages.push({
+        role: 'user' as const,
+        content: assistantMessage.content,
+      });
       finalText.push(assistantMessage.content);
       const followup = {
         role: 'user' as const,
         content: followupTemplateEdit,
       };
-      messages.push(followup);
+      toolCallMessages.push(followup);
       finalText.push(followup.content);
       return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
     }
-  }
-
-  private async handleToolResponseAnthropic(
-    modelName: ModelEnum,
-    messages: MessageParam[],
-    debug: boolean,
-  ): Promise<MessageParam> {
-    if (debug) {
-      console.log('Sending Anthropic followup message');
-      console.log(JSON.stringify(messages, null, 2));
-    }
-    const response = await this.anthropic?.beta.messages.create({
-      model: modelName,
-      max_tokens: 8192,
-      messages,
-      tools: this.tools,
-      betas: ['token-efficient-tools-2025-02-19'],
-    });
-
-    if (debug) {
-      console.log('Received Anthropic followup response');
-      console.log(JSON.stringify(response, null, 2));
-    }
-
-    return {
-      role: 'assistant',
-      content: response?.content || [],
-    };
-  }
-
-  private async handleToolResponseOpenAI(
-    modelName: ModelEnum,
-    messages: MessageParam[],
-    debug: boolean,
-  ): Promise<ChatCompletionMessage> {
-    const openAIMessages = messages.map(this.convertAnthropicMessageToOpenAI.bind(this));
-
-    if (debug) {
-      console.log('Sending followup OpenAI messages');
-    }
-    const response = await this.openai!.chat.completions.create({
-      model: modelName,
-      messages: openAIMessages,
-      tools: this.tools.map(tool => ({
-        type: 'function',
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.input_schema,
-        },
-      })),
-    });
-    if (debug) {
-      console.log('Received followup OpenAI response');
-    }
-
-    // Handle the response content
-    const message = response.choices[0].message;
-    return message;
-  }
-
-  private convertAnthropicMessageToOpenAI(msg: MessageParam): ChatCompletionMessageParam {
-    return {
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content:
-        typeof msg.content === 'string'
-          ? msg.content
-          : msg.content
-              .map(c => (c.type === 'text' ? c.text : ''))
-              .filter(Boolean)
-              .join('\n'),
-    };
   }
 
   async processQuery(
@@ -345,7 +275,16 @@ export class FileEditTool {
 
     const messageContent = queryWithFileContents + '\n\n' + query;
 
-    const globalMessages: MessageParam[] = [
+    // Messages for send-prompt
+    const messagesForUser: Array<InputMessage> = [
+      {
+        role: 'user',
+        content: messageContent,
+      },
+    ];
+
+    // Messages for handleToolUse
+    const messagesForToolCall: Array<InputMessage> = [
       {
         role: 'user',
         content: messageContent,
@@ -353,44 +292,73 @@ export class FileEditTool {
     ];
 
     let toolCallRounds = 0;
+    const finalResponseMessages: string[] = [];
+    const toolResults: string[] = [];
 
-    if (this.provider === AI_PROVIDERS.OPENAI) {
-      const openAIMessages = globalMessages.map(this.convertAnthropicMessageToOpenAI.bind(this));
-
+    while (toolCallRounds < this.maxToolUseRounds) {
       if (debug) {
-        console.log('Sending OpenAI initial message');
+        console.log(`Starting tool call round ${toolCallRounds + 1}`);
       }
-      const response = await this.openai?.chat.completions.create({
+
+      const apiKey =
+        this.provider === AI_PROVIDERS.ANTHROPIC ? this.anthropic?.apiKey : this.openai?.apiKey;
+
+      if (!apiKey) {
+        throw new Error('API key is not set');
+      }
+
+      const response = await sendPrompt({
+        messages: messagesForUser,
         model: this.modelName,
-        messages: openAIMessages,
-        tools: this.tools.map(tool => ({
-          type: 'function',
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.input_schema,
-          },
-        })),
+        provider: this.provider,
+        apiKey,
+        tools: this.tools.map(tool => {
+          const schema = tool.input_schema as {
+            type: string;
+            properties: Record<string, any>;
+            required?: string[];
+          };
+          return {
+            type: 'function' as const,
+            function: {
+              name: tool.name,
+              description: tool.description || '',
+              parameters: {
+                type: 'object',
+                properties: schema.properties,
+                required: schema.required || [],
+                additionalProperties: false,
+              },
+            },
+          };
+        }),
       });
 
-      const finalText: string[] = [];
-      const toolResults: string[] = [];
-
-      const initMessage = response?.choices[0].message;
-      if (initMessage?.content) {
-        finalText.push(initMessage.content);
+      if (response.message.content) {
+        finalResponseMessages.push(response.message.content);
+        messagesForUser.push({
+          role: 'assistant',
+          content: response.message.content,
+        });
+        messagesForToolCall.push({
+          role: 'assistant',
+          content: response.message.content,
+        });
       }
 
       if (debug) {
-        console.log('Received OpenAI initial response:', initMessage);
+        console.log('Received response:', response);
       }
 
-      if (initMessage?.tool_calls) {
+      let hasToolCalls = false;
+      if (response.tool_calls) {
+        hasToolCalls = true;
         toolCallRounds++;
-        for (const toolCall of initMessage.tool_calls) {
+        for (const toolCall of response.tool_calls) {
           if (debug) {
             console.log('Processing tool call:', toolCall);
           }
+
           const {
             finalText: toolFinalText,
             toolResults: newToolResults,
@@ -400,13 +368,15 @@ export class FileEditTool {
           } = await this.handleToolUse(
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments),
-            globalMessages,
+            messagesForToolCall,
+            messagesForUser,
           );
 
-          finalText.push(...toolFinalText);
+          finalResponseMessages.push(...toolFinalText);
           toolResults.push(...newToolResults);
           finalStatus = toolFinalStatus;
           toolCallCount++;
+
           if (newRawDiff) {
             rawDiff = {...rawDiff, ...newRawDiff};
           }
@@ -416,192 +386,27 @@ export class FileEditTool {
         }
       }
 
-      if (toolCallCount === 0) {
-        finalStatus = 'no_tool_calls';
-      }
-
-      let newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages, debug);
-      while (newMessage.tool_calls && toolCallRounds < this.maxToolUseRounds) {
-        for (const toolCall of newMessage.tool_calls) {
-          if (debug) {
-            console.log('Processing tool call:', toolCall);
-          }
-          const {
-            finalText: toolFinalText,
-            toolResults: newToolResults,
-            finalStatus: toolFinalStatus,
-          } = await this.handleToolUse(
-            toolCall.function.name,
-            JSON.parse(toolCall.function.arguments),
-            globalMessages,
-          );
-
-          finalText.push(...toolFinalText);
-          toolResults.push(...newToolResults);
-          finalStatus = toolFinalStatus;
-          toolCallCount++;
+      if (!hasToolCalls) {
+        if (toolCallCount === 0) {
+          finalStatus = 'no_tool_calls';
         }
-
-        newMessage = await this.handleToolResponseOpenAI(this.modelName, globalMessages, debug);
-        toolCallRounds++;
+        break;
       }
-
-      if (toolCallRounds >= this.maxToolUseRounds && newMessage.tool_calls) {
-        finalStatus = 'retry_limit_reached';
-      }
-
-      return {
-        finalText,
-        toolResults,
-        finalStatus,
-        toolCallCount,
-        toolCallRounds,
-        rawDiff,
-        reverseDiff,
-      };
-    } else if (this.provider === AI_PROVIDERS.ANTHROPIC) {
-      const finalText: string[] = [];
-      const toolResults: string[] = [];
-
-      if (debug) {
-        console.log('Sending Anthropic initial message');
-      }
-
-      const message = await this.anthropic!.beta.messages.create({
-        model: this.modelName,
-        max_tokens: 8192,
-        messages: globalMessages,
-        tools: this.tools,
-        betas: ['token-efficient-tools-2025-02-19'],
-      });
-
-      console.log('Received Anthropic initial response');
-      console.log(JSON.stringify(message, null, 2));
-
-      if (Array.isArray(message.content)) {
-        for (const content of message.content) {
-          if (typeof content === 'string') {
-            finalText.push(content);
-          } else if (content.type === 'text') {
-            finalText.push(content.text);
-          }
-        }
-      }
-
-      if (Array.isArray(message.content)) {
-        for (const content of message.content) {
-          if (typeof content !== 'string' && content.type === 'tool_use') {
-            if (debug) {
-              console.log('Processing tool call:', content.name);
-            }
-            const {
-              finalText: toolFinalText,
-              toolResults: newToolResults,
-              finalStatus: toolFinalStatus,
-              rawDiff: newRawDiff,
-              reverseDiff: newReverseDiff,
-            } = await this.handleToolUse(
-              content.name,
-              content.input as {[x: string]: unknown} | undefined,
-              globalMessages,
-            );
-
-            finalText.push(...toolFinalText);
-            toolResults.push(...newToolResults);
-            finalStatus = toolFinalStatus;
-            toolCallCount++;
-            if (newRawDiff) {
-              rawDiff = {...rawDiff, ...newRawDiff};
-            }
-            if (newReverseDiff) {
-              reverseDiff = {...reverseDiff, ...newReverseDiff};
-            }
-          }
-        }
-      }
-
-      if (toolCallCount === 0) {
-        finalStatus = 'no_tool_calls';
-      } else {
-        toolCallRounds++;
-      }
-
-      let newMessage = await this.handleToolResponseAnthropic(
-        this.modelName,
-        globalMessages,
-        debug,
-      );
-      while (
-        Array.isArray(newMessage.content) &&
-        newMessage.content.some(
-          content => typeof content !== 'string' && content.type === 'tool_use',
-        ) &&
-        toolCallRounds < this.maxToolUseRounds
-      ) {
-        for (const content of newMessage.content) {
-          if (typeof content !== 'string' && content.type === 'tool_use') {
-            if (debug) {
-              console.log('Processing tool call:', content.name);
-            }
-            const {
-              finalText: toolFinalText,
-              toolResults: newToolResults,
-              finalStatus: toolFinalStatus,
-              rawDiff: newRawDiff,
-              reverseDiff: newReverseDiff,
-            } = await this.handleToolUse(
-              content.name,
-              content.input as {[x: string]: unknown} | undefined,
-              globalMessages,
-            );
-
-            finalText.push(...toolFinalText);
-            toolResults.push(...newToolResults);
-            finalStatus = toolFinalStatus;
-            toolCallCount++;
-            if (newRawDiff) {
-              rawDiff = {...rawDiff, ...newRawDiff};
-            }
-            if (newReverseDiff) {
-              reverseDiff = {...reverseDiff, ...newReverseDiff};
-            }
-          }
-        }
-
-        newMessage = await this.handleToolResponseAnthropic(this.modelName, globalMessages, debug);
-        toolCallRounds++;
-      }
-
-      if (
-        toolCallRounds >= this.maxToolUseRounds &&
-        Array.isArray(newMessage.content) &&
-        newMessage.content.some(
-          content => typeof content !== 'string' && content.type === 'tool_use',
-        )
-      ) {
-        finalStatus = 'retry_limit_reached';
-      }
-
-      return {
-        finalText,
-        toolResults,
-        finalStatus,
-        toolCallCount,
-        toolCallRounds,
-        rawDiff,
-        reverseDiff,
-      };
-    } else {
-      return {
-        finalText: [`[Unsupported model: ${this.modelName}]`],
-        toolResults: [],
-        finalStatus: 'failure',
-        toolCallCount: 0,
-        toolCallRounds: 0,
-        rawDiff: undefined,
-        reverseDiff: undefined,
-      };
     }
+
+    if (toolCallRounds >= this.maxToolUseRounds) {
+      finalStatus = 'retry_limit_reached';
+    }
+
+    return {
+      finalText: finalResponseMessages,
+      toolResults,
+      finalStatus,
+      toolCallCount,
+      toolCallRounds,
+      rawDiff,
+      reverseDiff,
+    };
   }
 }
 

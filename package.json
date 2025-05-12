@@ -7,8 +7,7 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
@@ -43,7 +42,8 @@
     "@modelcontextprotocol/sdk": "^1.11.0",
     "diff": "^7.0.0",
     "llm-info": "^1.0.41",
-    "openai": "^4.97.0"
+    "openai": "^4.97.0",
+    "send-prompt": "^1.0.5"
   },
   "devDependencies": {
     "@types/diff": "^7.0.2",
