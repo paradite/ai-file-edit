@@ -1,4 +1,4 @@
-import {MessageParam, Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
+import {Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import fs from 'fs/promises';
 import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
 import {z} from 'zod';
@@ -205,7 +205,7 @@ export class FileEditTool {
     if (newFileCreated) {
       const toolResultMessage = {
         role: 'assistant' as const,
-        content: `[Tool call completed: New file has been created]\n\n${result}`,
+        content: `[Tool call completed: New file has been created]\n\n${result}`.trimEnd(),
       };
       toolCallMessages.push(toolResultMessage);
       userTextMessages.push({
@@ -225,7 +225,8 @@ export class FileEditTool {
     } else {
       const assistantMessage = {
         role: 'assistant' as const,
-        content: `[Tool call completed: ${result}]\n\n[New file content]\n\n${queryWithFileContents}`,
+        content:
+          `[Tool call completed: ${result}]\n\n[New file content]\n\n${queryWithFileContents}`.trimEnd(),
       };
       toolCallMessages.push(assistantMessage);
       userTextMessages.push({
@@ -338,11 +339,11 @@ export class FileEditTool {
         finalResponseMessages.push(response.message.content);
         messagesForUser.push({
           role: 'assistant',
-          content: response.message.content,
+          content: response.message.content.trimEnd(),
         });
         messagesForToolCall.push({
           role: 'assistant',
-          content: response.message.content,
+          content: response.message.content.trimEnd(),
         });
       }
 
