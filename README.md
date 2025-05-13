@@ -18,8 +18,9 @@ File Operations
 
 AI Integration
 
-- Support for both OpenAI and Anthropic models
+- Support for OpenAI, Anthropic, and Google AI models
 - Support for multiple tool use rounds
+- Debug mode for detailed logging
 
 Version Control & Safety
 
@@ -53,7 +54,7 @@ const claudeFileEditTool = new FileEditTool(
   AI_PROVIDERS.ANTHROPIC,
   process.env.ANTHROPIC_API_KEY,
   ['/path/to/file1.js', '/path/to/file2.js'], // Optional: Files to include in context
-  5, // Optional: Maximum number of tool use rounds (default: 3)
+  5, // Optional: Maximum number of tool use rounds (default: 5)
 );
 
 // Initialize the tool with GPT
@@ -64,7 +65,18 @@ const gptFileEditTool = new FileEditTool(
   AI_PROVIDERS.OPENAI,
   process.env.OPENAI_API_KEY,
   ['/path/to/file1.js', '/path/to/file2.js'], // Optional: Files to include in context
-  5, // Optional: Maximum number of tool use rounds (default: 3)
+  5, // Optional: Maximum number of tool use rounds (default: 5)
+);
+
+// Initialize the tool with Google AI
+const googleFileEditTool = new FileEditTool(
+  '/path/to/parent/directory', // Parent directory for relative paths
+  ['/path/to/allowed/directory'], // Allowed directories for file operations
+  ModelEnum['gemini-2.5-pro-preview-05-06'],
+  AI_PROVIDERS.GOOGLE,
+  process.env.GOOGLE_API_KEY,
+  ['/path/to/file1.js', '/path/to/file2.js'], // Optional: Files to include in context
+  5, // Optional: Maximum number of tool use rounds (default: 5)
 );
 ```
 
@@ -83,11 +95,13 @@ const fileEditTool = new FileEditTool(
   ['/path/to/file/to/edit'], // Optional: Files to include in context
 );
 
-const response = await fileEditTool.processQuery('Update the file to add a new function');
+// Process query with debug mode enabled
+const response = await fileEditTool.processQuery('Update the file to add a new function', true);
 console.log(response.finalText);
 console.log(response.toolResults);
 console.log(response.rawDiff);
 console.log(response.reverseDiff);
+console.log(response.toolCallRounds);
 ```
 
 ### Diffs and Reverting Changes
@@ -168,11 +182,29 @@ const fileEditTool = new FileEditTool(
   AI_PROVIDERS.ANTHROPIC,
   'your-api-key',
   ['/path/to/file1.js', '/path/to/file2.js'],
-  5, // Maximum number of tool use rounds
+  5, // Maximum number of tool use rounds (default: 5)
 );
 ```
 
-If not specified, the default value is 3 rounds.
+If not specified, the default value is 5 rounds. The number of rounds used is tracked in the response's `toolCallRounds` field.
+
+### Debug Mode
+
+The `processQuery` method supports an optional debug mode that provides detailed logging of the tool's operation:
+
+```typescript
+const response = await fileEditTool.processQuery('Update the file to add a new function', true);
+```
+
+When debug mode is enabled, the tool will log:
+
+- The initial query
+- Each tool call round
+- The message history
+- Tool call processing details
+- Response details
+
+This is useful for debugging and understanding how the tool processes queries and makes changes.
 
 ## Response Structure
 
@@ -184,6 +216,7 @@ The `processQuery` method returns an object with the following structure:
   toolResults: string[];    // Array of results from tool operations
   finalStatus: 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
   toolCallCount: number;    // Number of tool calls made
+  toolCallRounds: number;   // Number of tool call rounds used
   rawDiff?: Record<string, string>;    // Forward diffs for each file, keyed by file path
   reverseDiff?: Record<string, string>; // Reverse diffs for each file, keyed by file path
 }
@@ -197,6 +230,7 @@ Example response with diffs:
   toolResults: ["File updated successfully"],
   finalStatus: "success",
   toolCallCount: 1,
+  toolCallRounds: 1,
   rawDiff: {
     "/path/to/file1.js": "Index: /path/to/file1.js\n...",
     "/path/to/file2.js": "Index: /path/to/file2.js\n..."
@@ -262,11 +296,12 @@ Parameters:
 ##### processQuery
 
 ```typescript
-async processQuery(query: string): Promise<{
+async processQuery(query: string, debugMode: boolean = false): Promise<{
   finalText: string[];
   toolResults: string[];
   finalStatus: ToolCallStatus;
   toolCallCount: number;
+  toolCallRounds: number;
   rawDiff?: string;
   reverseDiff?: string;
 }>
@@ -275,11 +310,13 @@ async processQuery(query: string): Promise<{
 Processes a natural language query and returns the results.
 
 - `query`: The natural language query to process
+- `debugMode`: Optional boolean indicating whether to enable debug mode
 - Returns:
   - `finalText`: The final text response from the model
   - `toolResults`: The results of any tool calls made
   - `finalStatus`: The final status of the tool calls
   - `toolCallCount`: The number of tool calls made
+  - `toolCallRounds`: The number of tool call rounds used
   - `rawDiff`: The forward diff showing the changes made
   - `reverseDiff`: The reverse diff for reverting changes
 
