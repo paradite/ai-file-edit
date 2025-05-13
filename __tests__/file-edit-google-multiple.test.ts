@@ -3,13 +3,13 @@ import fs from 'fs/promises';
 import path from 'path';
 import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
-const model = ModelEnum['gpt-4.1'];
+const model = ModelEnum['gemini-2.5-pro-exp-03-25'];
 
-jest.retryTimes(1);
+// jest.retryTimes(1);
 
-describe('File Edit Tool with OpenAI - Multiple Files', () => {
+describe('File Edit Tool with Google Gemini - Multiple Files', () => {
   let fileEditTool: FileEditTool;
-  const testDir = path.join(process.cwd(), 'sample-openai-multiple');
+  const testDir = path.join(process.cwd(), 'sample-google-multiple');
 
   beforeAll(async () => {
     // Create test directories
@@ -22,7 +22,7 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
     await fs.rm(testDir, {recursive: true, force: true});
   });
 
-  test('should edit multiple files in allowed directory using OpenAI', async () => {
+  test('should edit multiple files in allowed directory using Google Gemini', async () => {
     // Create test files with initial content
     const file1Path = path.join(testDir, '1', 'file1.js');
     const file2Path = path.join(testDir, '1', 'file2.js');
@@ -52,8 +52,8 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
       testDir,
       [path.join(testDir, '1')],
       model,
-      AI_PROVIDERS.OPENAI,
-      process.env.OPENAI_API_KEY || '',
+      AI_PROVIDERS.GOOGLE,
+      process.env.GEMINI_API_KEY || '',
       [
         path.join(testDir, '1', 'file1.js'),
         path.join(testDir, '1', 'file2.js'),
@@ -61,9 +61,10 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
         path.join(testDir, '1', 'file4.js'),
         path.join(testDir, '1', 'file5.js'),
       ],
+      3,
     );
 
-    // Test editing multiple files in allowed directory using OpenAI
+    // Test editing multiple files in allowed directory using Google Gemini
     const response = await fileEditTool.processQuery(
       `Please modify all five JavaScript files to use multiplication operations instead of their current operations.
        In file1.js, replace the add function with multiply and update its implementation to use * operator.
@@ -75,7 +76,7 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
       true,
     );
 
-    // Check the response contains expected diffs for all three files
+    // Check the response contains expected diffs for all files
     expect(response.rawDiff).toBeDefined();
     expect(response.reverseDiff).toBeDefined();
 
@@ -111,7 +112,6 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
     expect(response.reverseDiff?.[file5Path]).toContain('-function multiply(a, b)');
     expect(response.reverseDiff?.[file5Path]).toContain('+function modulo(a, b)');
 
-    // console.log('Tool results:', response.toolResults.join('\n'));
     expect(response.finalText.join('\n')).toContain('Successfully updated file');
     expect(response.finalStatus).toBe('success');
     expect(response.toolCallRounds).toBeLessThanOrEqual(2);

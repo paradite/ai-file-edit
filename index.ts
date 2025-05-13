@@ -8,6 +8,13 @@ import {InputMessage, sendPrompt} from 'send-prompt';
 
 export type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
 
+const defaultSystemPrompt = `You are a helpful assistant that can edit files.
+
+You can edit files or create new files using the edit_file tool.
+
+You can edit multiple files at once by calling the edit_file tool multiple times.
+`;
+
 const followupTemplateNewFile = `Based on the tool call result, check if you need to perform any follow up actions via the tools.
 
 If you need to perform follow up actions, call the appropriate tool. If not, respond with "No follow up actions needed".
@@ -213,42 +220,53 @@ export class FileEditTool {
         name: toolName,
         args: toolArgs || {},
       };
-      const toolResponseMessage = {
-        role: 'google_function_response' as const,
-        id: toolCallId,
-        name: toolName,
-        response: {result},
-      };
       globalMessageHistory.push(toolCallMessage);
-      globalMessageHistory.push(toolResponseMessage);
-    }
-
-    // TODO: optimize other providers to also include both tool call and response messages
-    if (newFileCreated) {
-      const toolResultMessage = {
-        role: 'user' as const,
-        content:
-          `[Tool call completed: New file has been created]\n\n${result}\n\n${followupTemplateNewFile}`.trimEnd(),
-      };
-      globalMessageHistory.push(toolResultMessage);
-      finalText.push(toolResultMessage.content);
-
-      return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
+      if (newFileCreated) {
+        const toolResponseMessage = {
+          role: 'google_function_response' as const,
+          id: toolCallId,
+          name: toolName,
+          response: {result: `${result}\n\n${followupTemplateNewFile}`},
+        };
+        globalMessageHistory.push(toolResponseMessage);
+        finalText.push(toolResponseMessage.response.result);
+      } else {
+        const toolResponseMessage = {
+          role: 'google_function_response' as const,
+          id: toolCallId,
+          name: toolName,
+          response: {result: `${result}\n\n${followupTemplateEdit}`},
+        };
+        globalMessageHistory.push(toolResponseMessage);
+        finalText.push(toolResponseMessage.response.result);
+      }
     } else {
-      const assistantMessage = {
-        role: 'assistant' as const,
-        content:
-          `[Tool call completed: ${result}]\n\n[Updated file content]\n\n${queryWithFileContents}\n\n${followupTemplateEdit}`.trimEnd(),
-      };
-      globalMessageHistory.push(assistantMessage);
-      finalText.push(assistantMessage.content);
-      return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
+      // TODO: optimize other providers to also include both tool call and response messages
+      if (newFileCreated) {
+        const toolResultMessage = {
+          role: 'user' as const,
+          content:
+            `[Tool call completed: New file has been created]\n\n${result}\n\n${followupTemplateNewFile}`.trimEnd(),
+        };
+        globalMessageHistory.push(toolResultMessage);
+        finalText.push(toolResultMessage.content);
+      } else {
+        const assistantMessage = {
+          role: 'assistant' as const,
+          content:
+            `[Tool call completed: ${result}]\n\n[Updated file content]\n\n${queryWithFileContents}\n\n${followupTemplateEdit}`.trimEnd(),
+        };
+        globalMessageHistory.push(assistantMessage);
+        finalText.push(assistantMessage.content);
+      }
     }
+    return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
   }
 
   async processQuery(
     query: string,
     debug: boolean = false,
+    systemPrompt: string = defaultSystemPrompt,
   ): Promise<{
     finalText: string[];
     toolResults: string[];
@@ -308,6 +326,7 @@ export class FileEditTool {
 
       const response = await sendPrompt({
         messages: globalMessageHistory,
+        systemPrompt,
         model: this.modelName,
         provider: this.provider,
         apiKey,
