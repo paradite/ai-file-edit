@@ -109,6 +109,7 @@ export class FileEditTool {
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
     globalMessageHistory: InputMessage[],
+    toolCallId: string,
   ): Promise<{
     finalText: string[];
     toolResults: string[];
@@ -204,6 +205,25 @@ export class FileEditTool {
           .join('\n\n')
       : '';
 
+    if (this.provider === AI_PROVIDERS.GOOGLE) {
+      // For Google, add both the function call and response messages
+      const toolCallMessage = {
+        role: 'google_function_call' as const,
+        id: toolCallId,
+        name: toolName,
+        args: toolArgs || {},
+      };
+      const toolResponseMessage = {
+        role: 'google_function_response' as const,
+        id: toolCallId,
+        name: toolName,
+        response: {result},
+      };
+      globalMessageHistory.push(toolCallMessage);
+      globalMessageHistory.push(toolResponseMessage);
+    }
+
+    // TODO: optimize other providers to also include both tool call and response messages
     if (newFileCreated) {
       const toolResultMessage = {
         role: 'user' as const,
@@ -352,6 +372,7 @@ export class FileEditTool {
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments),
             globalMessageHistory,
+            toolCall.id,
           );
 
           finalResponseMessages.push(...toolFinalText);

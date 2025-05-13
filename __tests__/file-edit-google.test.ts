@@ -43,7 +43,6 @@ describe('File Edit Tool with Google Gemini', () => {
     // Test editing file in allowed directory using Google Gemini
     const response = await fileEditTool.processQuery(
       `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
-      true,
     );
     expect(response.finalText.join('\n')).toContain('Successfully updated file');
     expect(response.finalStatus).toBe('success');
@@ -61,7 +60,7 @@ describe('File Edit Tool with Google Gemini', () => {
     expect(editedContent).not.toContain('console.log(add(1, 2));');
   });
 
-  test.skip('should create new file in allowed directory using Google Gemini', async () => {
+  test('should create new file in allowed directory using Google Gemini', async () => {
     // Define path for new file
     const newFilePath = path.join(testDir, '1', 'new-file-gemini.js');
 
@@ -78,7 +77,6 @@ describe('File Edit Tool with Google Gemini', () => {
     // Test creating a new file using Google Gemini
     const response = await fileEditTool.processQuery(
       `create new file ${newFilePath} with content: function greet(name) { return "Hello, " + name; }`,
-      true,
     );
     expect(response.finalText.join('\n')).toContain('Successfully created file');
     expect(response.finalStatus).toBe('success');
