@@ -6,6 +6,38 @@ import {zodToJsonSchema} from 'zod-to-json-schema';
 import {validatePath, applyFileEdits, applyReversePatch} from './utils/fileUtils.js';
 import {InputMessage, sendPrompt} from 'send-prompt';
 
+export const SUPPORTED_MODELS: {
+  model: ModelEnum;
+  provider: AI_PROVIDER_TYPE;
+  recommended: boolean;
+  supportMultipleEditsPerMessage: boolean;
+}[] = [
+  {
+    model: ModelEnum['gpt-4.1'],
+    provider: AI_PROVIDERS.OPENAI,
+    recommended: true,
+    supportMultipleEditsPerMessage: true,
+  },
+  {
+    model: ModelEnum['claude-3-7-sonnet-20250219'],
+    provider: AI_PROVIDERS.ANTHROPIC,
+    recommended: false,
+    supportMultipleEditsPerMessage: false,
+  },
+  {
+    model: ModelEnum['gemini-2.5-pro-preview-05-06'],
+    provider: AI_PROVIDERS.GOOGLE,
+    recommended: false,
+    supportMultipleEditsPerMessage: true,
+  },
+  {
+    model: ModelEnum['gemini-2.5-pro-exp-03-25'],
+    provider: AI_PROVIDERS.GOOGLE,
+    recommended: false,
+    supportMultipleEditsPerMessage: true,
+  },
+] as const;
+
 export type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
 
 const defaultSystemPrompt = `You are a helpful assistant that can edit files.

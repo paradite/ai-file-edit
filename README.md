@@ -32,6 +32,46 @@ Security
 
 - Secure file access with allowed directories
 
+## Supported Models
+
+```typescript
+import {SUPPORTED_MODELS} from 'ai-file-edit';
+import {ModelEnum, AI_PROVIDERS} from 'llm-info';
+
+// Print all supported models
+console.log(SUPPORTED_MODELS);
+
+// Example output:
+[
+  {
+    model: ModelEnum['gpt-4.1'],
+    provider: AI_PROVIDERS.OPENAI,
+    recommended: true,
+    supportMultipleEditsPerMessage: true,
+  },
+  {
+    model: ModelEnum['claude-3-7-sonnet-20250219'],
+    provider: AI_PROVIDERS.ANTHROPIC,
+    recommended: false,
+    supportMultipleEditsPerMessage: false,
+  },
+  {
+    model: ModelEnum['gemini-2.5-pro-preview-05-06'],
+    provider: AI_PROVIDERS.GOOGLE,
+    recommended: false,
+    supportMultipleEditsPerMessage: true,
+  },
+  {
+    model: ModelEnum['gemini-2.5-pro-exp-03-25'],
+    provider: AI_PROVIDERS.GOOGLE,
+    recommended: false,
+    supportMultipleEditsPerMessage: true,
+  },
+];
+```
+
+Note: The recommended model is `gpt-4.1` as it provides the best performance for file editing tasks.
+
 ## Installation
 
 ```bash
