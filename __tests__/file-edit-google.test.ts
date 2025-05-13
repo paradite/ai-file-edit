@@ -43,7 +43,7 @@ describe('File Edit Tool with Google Gemini', () => {
 
     // Test editing file in allowed directory using Google Gemini
     const response = await fileEditTool.processQuery(
-      `update ${testFilePath} to change add to multiply, update both the function definition and the function calls add(1,2) to multiply(1,2)`,
+      `update ${testFilePath} to change add to multiply, update the function definition and implementation. Also update the function calls add(1,2) to multiply(1,2)`,
     );
     expect(response.finalText.join('\n')).toContain('Successfully updated file');
     expect(response.finalStatus).toBe('success');
