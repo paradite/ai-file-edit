@@ -43,7 +43,7 @@
     "diff": "^7.0.0",
     "llm-info": "^1.0.41",
     "openai": "^4.97.0",
-    "send-prompt": "^1.0.8"
+    "send-prompt": "^1.0.10"
   },
   "devDependencies": {
     "@types/diff": "^7.0.2",
