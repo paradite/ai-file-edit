@@ -296,7 +296,11 @@ Parameters:
 ##### processQuery
 
 ```typescript
-async processQuery(query: string, debugMode: boolean = false): Promise<{
+async processQuery(
+  query: string,
+  debugMode: boolean = false,
+  systemPrompt: string = defaultSystemPrompt
+): Promise<{
   finalText: string[];
   toolResults: string[];
   finalStatus: ToolCallStatus;
@@ -311,6 +315,7 @@ Processes a natural language query and returns the results.
 
 - `query`: The natural language query to process
 - `debugMode`: Optional boolean indicating whether to enable debug mode
+- `systemPrompt`: Optional string to override the default system prompt
 - Returns:
   - `finalText`: The final text response from the model
   - `toolResults`: The results of any tool calls made
