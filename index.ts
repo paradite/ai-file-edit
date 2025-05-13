@@ -36,6 +36,7 @@ const EditFileArgsSchema = z.object({
 export class FileEditTool {
   private anthropic: {apiKey: string} | null = null;
   private openai: {apiKey: string} | null = null;
+  private google: {apiKey: string} | null = null;
   private allowedDirectories: string[] = [];
   private fileContents: Record<string, string> = {};
   private tools: Tool[] = [];
@@ -65,6 +66,8 @@ export class FileEditTool {
       this.anthropic = {apiKey};
     } else if (provider === AI_PROVIDERS.OPENAI) {
       this.openai = {apiKey};
+    } else if (provider === AI_PROVIDERS.GOOGLE) {
+      this.google = {apiKey};
     }
 
     const editFileSchema = zodToJsonSchema(EditFileArgsSchema) as {
@@ -105,8 +108,7 @@ export class FileEditTool {
   private async handleToolUse(
     toolName: string,
     toolArgs: {[x: string]: unknown} | undefined,
-    toolCallMessages: InputMessage[],
-    userTextMessages: InputMessage[],
+    globalMessageHistory: InputMessage[],
   ): Promise<{
     finalText: string[];
     toolResults: string[];
@@ -204,42 +206,22 @@ export class FileEditTool {
 
     if (newFileCreated) {
       const toolResultMessage = {
-        role: 'assistant' as const,
-        content: `[Tool call completed: New file has been created]\n\n${result}`.trimEnd(),
-      };
-      toolCallMessages.push(toolResultMessage);
-      userTextMessages.push({
         role: 'user' as const,
-        content: toolResultMessage.content,
-      });
+        content:
+          `[Tool call completed: New file has been created]\n\n${result}\n\n${followupTemplateNewFile}`.trimEnd(),
+      };
+      globalMessageHistory.push(toolResultMessage);
       finalText.push(toolResultMessage.content);
-
-      const followup = {
-        role: 'user' as const,
-        content: followupTemplateNewFile,
-      };
-      toolCallMessages.push(followup);
-      finalText.push(followup.content);
 
       return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
     } else {
       const assistantMessage = {
         role: 'assistant' as const,
         content:
-          `[Tool call completed: ${result}]\n\n[New file content]\n\n${queryWithFileContents}`.trimEnd(),
+          `[Tool call completed: ${result}]\n\n[Updated file content]\n\n${queryWithFileContents}\n\n${followupTemplateEdit}`.trimEnd(),
       };
-      toolCallMessages.push(assistantMessage);
-      userTextMessages.push({
-        role: 'user' as const,
-        content: assistantMessage.content,
-      });
+      globalMessageHistory.push(assistantMessage);
       finalText.push(assistantMessage.content);
-      const followup = {
-        role: 'user' as const,
-        content: followupTemplateEdit,
-      };
-      toolCallMessages.push(followup);
-      finalText.push(followup.content);
       return {finalText, toolResults, finalStatus, rawDiff, reverseDiff, newFileCreated};
     }
   }
@@ -276,16 +258,7 @@ export class FileEditTool {
 
     const messageContent = queryWithFileContents + '\n\n' + query;
 
-    // Messages for send-prompt
-    const messagesForUser: Array<InputMessage> = [
-      {
-        role: 'user',
-        content: messageContent,
-      },
-    ];
-
-    // Messages for handleToolUse
-    const messagesForToolCall: Array<InputMessage> = [
+    const globalMessageHistory: Array<InputMessage> = [
       {
         role: 'user',
         content: messageContent,
@@ -299,17 +272,22 @@ export class FileEditTool {
     while (toolCallRounds < this.maxToolUseRounds) {
       if (debug) {
         console.log(`Starting tool call round ${toolCallRounds + 1}`);
+        console.log(JSON.stringify(globalMessageHistory, null, 2));
       }
 
       const apiKey =
-        this.provider === AI_PROVIDERS.ANTHROPIC ? this.anthropic?.apiKey : this.openai?.apiKey;
+        this.provider === AI_PROVIDERS.ANTHROPIC
+          ? this.anthropic?.apiKey
+          : this.provider === AI_PROVIDERS.OPENAI
+          ? this.openai?.apiKey
+          : this.google?.apiKey;
 
       if (!apiKey) {
         throw new Error('API key is not set');
       }
 
       const response = await sendPrompt({
-        messages: messagesForUser,
+        messages: globalMessageHistory,
         model: this.modelName,
         provider: this.provider,
         apiKey,
@@ -319,17 +297,25 @@ export class FileEditTool {
             properties: Record<string, any>;
             required?: string[];
           };
+          const parameters: any = {
+            type: 'object',
+            properties: schema.properties,
+            required: schema.required || [],
+          };
+          // Only include additionalProperties for non-Google providers
+          if (this.provider === AI_PROVIDERS.GOOGLE) {
+            delete parameters.additionalProperties;
+            // Also remove additionalProperties from nested items schema
+            if (parameters.properties.edits?.items) {
+              delete parameters.properties.edits.items.additionalProperties;
+            }
+          }
           return {
             type: 'function' as const,
             function: {
               name: tool.name,
               description: tool.description || '',
-              parameters: {
-                type: 'object',
-                properties: schema.properties,
-                required: schema.required || [],
-                additionalProperties: false,
-              },
+              parameters,
             },
           };
         }),
@@ -337,11 +323,7 @@ export class FileEditTool {
 
       if (response.message.content) {
         finalResponseMessages.push(response.message.content);
-        messagesForUser.push({
-          role: 'assistant',
-          content: response.message.content.trimEnd(),
-        });
-        messagesForToolCall.push({
+        globalMessageHistory.push({
           role: 'assistant',
           content: response.message.content.trimEnd(),
         });
@@ -369,8 +351,7 @@ export class FileEditTool {
           } = await this.handleToolUse(
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments),
-            messagesForToolCall,
-            messagesForUser,
+            globalMessageHistory,
           );
 
           finalResponseMessages.push(...toolFinalText);

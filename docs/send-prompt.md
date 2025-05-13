@@ -131,3 +131,60 @@ if (response.tool_calls) {
   console.log('Arguments:', JSON.parse(toolCall.function.arguments));
 }
 ```
+
+### Multi-round Tool Calls (Google)
+
+For Google's Gemini models, you can handle multi-round tool calls by including function call and response messages in the conversation:
+
+```typescript
+// First round - model makes a function call
+const firstResponse = await sendPrompt({
+  messages: [{role: 'user', content: 'What is 15 plus 32?'}],
+  model: ModelEnum['gemini-2.5-pro-exp-03-25'],
+  provider: AI_PROVIDERS.GOOGLE,
+  apiKey: 'your-google-api-key',
+  tools: [calculatorTool],
+  toolCallMode: 'AUTO',
+});
+
+// Handle the function call and get the result
+if (firstResponse.tool_calls) {
+  const toolCall = firstResponse.tool_calls[0];
+  const args = JSON.parse(toolCall.function.arguments);
+  const result = calculate(args.operation, args.a, args.b); // Your calculation function
+
+  // Second round - include function call and response in messages
+  const secondResponse = await sendPrompt({
+    messages: [
+      {role: 'user', content: 'What is 15 plus 32?'},
+      {
+        role: 'google_function_call',
+        id: toolCall.id,
+        name: toolCall.function.name,
+        args: args,
+      },
+      {
+        role: 'google_function_response',
+        id: toolCall.id,
+        name: toolCall.function.name,
+        response: {result},
+      },
+    ],
+    model: ModelEnum['gemini-2.5-pro-exp-03-25'],
+    provider: AI_PROVIDERS.GOOGLE,
+    apiKey: 'your-google-api-key',
+    tools: [calculatorTool],
+    toolCallMode: 'AUTO',
+  });
+
+  // The model will now respond with the final answer
+  console.log('Final response:', secondResponse.message.content);
+}
+```
+
+The multi-round tool calling process involves:
+
+1. First round: Model makes a function call
+2. Your code executes the function and gets the result
+3. Second round: Include both the function call and its response in the messages
+4. Model provides the final response using the function result
