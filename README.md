@@ -31,6 +31,9 @@ Version Control & Safety
 Security
 
 - Secure file access with allowed directories
+- API key security
+- File path validation
+- Safe symlink handling
 
 ## Supported Models
 
@@ -197,26 +200,13 @@ The `applyReversePatch` function returns a promise that resolves to an object wi
 - `success`: boolean indicating whether the operation was successful
 - `error`: optional string containing error message if the operation failed
 
-### File Context
+### File Context and Tool Use Rounds
 
 You can provide a list of files to include in the context of the query. This is useful when you want to reference multiple files in your query:
 
 ```typescript
 const fileEditTool = new FileEditTool(
-  ['/path/to/allowed/directory'],
-  ModelEnum['claude-3-7-sonnet-20250219'],
-  AI_PROVIDERS.ANTHROPIC,
-  'your-api-key',
-  ['/path/to/file1.js', '/path/to/file2.js'],
-);
-```
-
-### Tool Use Rounds
-
-The tool supports multiple rounds of tool use, allowing the model to make multiple changes in response to a single query. The maximum number of rounds is configurable through the `maxToolUseRounds` parameter in the constructor:
-
-```typescript
-const fileEditTool = new FileEditTool(
+  '/path/to/parent/directory',
   ['/path/to/allowed/directory'],
   ModelEnum['claude-3-7-sonnet-20250219'],
   AI_PROVIDERS.ANTHROPIC,
@@ -226,7 +216,7 @@ const fileEditTool = new FileEditTool(
 );
 ```
 
-If not specified, the default value is 5 rounds. The number of rounds used is tracked in the response's `toolCallRounds` field.
+The tool supports multiple rounds of tool use, allowing the model to make multiple changes in response to a single query. The maximum number of rounds is configurable through the `maxToolUseRounds` parameter in the constructor.
 
 ### Debug Mode
 
@@ -287,12 +277,6 @@ Example response with diffs:
 - Cannot delete files
 - Cannot edit too many files at once (> 3 files)
 
-## Security Considerations
-
-- The library only allows file operations within specified allowed directories
-- API keys should be stored securely and not hardcoded
-- File paths are validated before any operations are performed
-
 ## Testing
 
 The library includes test cases for both Claude and GPT models. To run the tests:
@@ -301,106 +285,6 @@ The library includes test cases for both Claude and GPT models. To run the tests
 npm test
 ```
 
-## API
-
-### FileEditTool
-
-#### Constructor
-
-```typescript
-import {ModelEnum, AI_PROVIDERS} from 'llm-info';
-
-constructor(
-  parentDir: string,  // Parent directory for relative paths
-  allowedDirectories: string[] = [],  // Allowed directories for file operations
-  modelName: ModelEnum,
-  provider: AI_PROVIDER_TYPE,
-  apiKey: string,
-  fileContext: string[] = [],  // Optional: Files to include in context
-  maxToolUseRounds: number = 3,  // Optional: Maximum number of tool use rounds
-)
-```
-
-Parameters:
-
-- `parentDir`: Parent directory for resolving relative paths
-- `allowedDirectories`: Array of directories where file operations are allowed
-- `modelName`: The AI model to use (from ModelEnum)
-- `provider`: The AI provider (from AI_PROVIDERS)
-- `apiKey`: Your API key for the AI provider
-- `fileContext`: Optional array of file paths to include in the context
-- `maxToolUseRounds`: Optional maximum number of tool use rounds (default: 3)
-
-#### Methods
-
-##### processQuery
-
-```typescript
-async processQuery(
-  query: string,
-  debugMode: boolean = false,
-  systemPrompt: string = defaultSystemPrompt
-): Promise<{
-  finalText: string[];
-  toolResults: string[];
-  finalStatus: ToolCallStatus;
-  toolCallCount: number;
-  toolCallRounds: number;
-  rawDiff?: string;
-  reverseDiff?: string;
-}>
-```
-
-Processes a natural language query and returns the results.
-
-- `query`: The natural language query to process
-- `debugMode`: Optional boolean indicating whether to enable debug mode
-- `systemPrompt`: Optional string to override the default system prompt
-- Returns:
-  - `finalText`: The final text response from the model
-  - `toolResults`: The results of any tool calls made
-  - `finalStatus`: The final status of the tool calls
-  - `toolCallCount`: The number of tool calls made
-  - `toolCallRounds`: The number of tool call rounds used
-  - `rawDiff`: The forward diff showing the changes made
-  - `reverseDiff`: The reverse diff for reverting changes
-
-## Security
-
-The tool enforces security by:
-
-1. Only allowing access to files within the specified allowed directories
-2. Validating file paths to prevent directory traversal attacks
-3. Handling symlinks safely by checking their real paths
-4. Verifying parent directories for new files
-
 ## License
 
 MIT
-
-## Diffs
-
-The tool provides both raw and reverse diffs in a git-style format. The diffs are returned as a record where:
-
-- The key is the file path
-- The value is the diff content
-
-Example diff format:
-
-```diff
-Index: /path/to/file.js
-===================================================================
---- /path/to/file.js original
-+++ /path/to/file.js modified
-@@ -1,2 +1,2 @@
--function add(a, b) { return a + b; }
--console.log(add(1, 2));
-+function multiply(a, b) { return a * b; }
-+console.log(multiply(1, 2));
-```
-
-The raw diff shows the changes made to the file, while the reverse diff shows how to revert those changes. This allows you to:
-
-1. Track what changes were made to each file
-2. Revert changes if needed using the reverse diff
-3. Reapply changes using the raw diff
