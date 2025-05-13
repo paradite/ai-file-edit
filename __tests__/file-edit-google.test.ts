@@ -3,9 +3,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
-const model = ModelEnum['gemini-2.5-pro-exp-03-25'];
+// const model = ModelEnum['gemini-2.5-pro-exp-03-25'];
+const model = ModelEnum['gemini-2.5-pro-preview-05-06'];
 
-jest.retryTimes(1);
+// jest.retryTimes(1);
 
 describe('File Edit Tool with Google Gemini', () => {
   let fileEditTool: FileEditTool;

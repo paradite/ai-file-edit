@@ -14,7 +14,8 @@
     "dist"
   ],
   "scripts": {
-    "test": "npm run build && jest",
+    "test": "npm run build && jest --silent",
+    "test:debug": "npm run build && jest --verbose",
     "test:watch": "npm run build && jest --watch",
     "test:file": "npm run build && jest --verbose",
     "test:diff": "npm run build && jest --verbose diff.test.ts",

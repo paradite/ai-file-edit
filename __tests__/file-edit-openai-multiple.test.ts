@@ -5,7 +5,7 @@ import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
 const model = ModelEnum['gpt-4.1'];
 
-jest.retryTimes(1);
+// jest.retryTimes(1);
 
 describe('File Edit Tool with OpenAI - Multiple Files', () => {
   let fileEditTool: FileEditTool;

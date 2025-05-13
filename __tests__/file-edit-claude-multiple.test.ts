@@ -6,7 +6,7 @@ import {applyReversePatch} from '../utils/fileUtils';
 
 const model = ModelEnum['claude-3-7-sonnet-20250219'];
 
-jest.retryTimes(1);
+// jest.retryTimes(1);
 
 describe('File Edit Tool with Claude - Multiple Files', () => {
   let fileEditTool: FileEditTool;

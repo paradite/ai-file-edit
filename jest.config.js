@@ -10,4 +10,5 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   testTimeout: 30000, // 30 seconds,
+  maxWorkers: 1, // Run tests sequentially
 };

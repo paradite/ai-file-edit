@@ -6,8 +6,6 @@ import {applyReversePatch} from '../utils/fileUtils';
 
 const model = ModelEnum['claude-3-7-sonnet-20250219'];
 
-jest.retryTimes(1);
-
 describe('Diff Output Tests', () => {
   let fileEditTool: FileEditTool;
   const testDir = path.join(process.cwd(), 'sample-diff');

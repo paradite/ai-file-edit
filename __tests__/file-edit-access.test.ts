@@ -5,8 +5,6 @@ import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
 const model = ModelEnum['gpt-4.1'];
 
-jest.retryTimes(1);
-
 describe('File Edit Tool Access Control', () => {
   let fileEditTool: FileEditTool;
   const testDir = path.join(process.cwd(), 'sample-access');
