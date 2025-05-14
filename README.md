@@ -2,9 +2,14 @@
 
 [![npm](https://img.shields.io/npm/v/ai-file-edit)](https://www.npmjs.com/package/ai-file-edit)
 
-A library for editing files using AI models (Claude and OpenAI), developed for [16x Prompt](https://prompt.16x.engineer/).
+A library for editing files using AI models such as GPT, Claude, and Gemini.
 
-This library allows you to make file edits using natural language instructions.
+Developed by the [16x Prompt](https://prompt.16x.engineer/) team.
+
+Related projects:
+
+- [llm-info](https://github.com/paradite/llm-info): Information on LLM models, context window token limit, output token limit, pricing and more.
+- [send-prompt](https://github.com/paradite/send-prompt): A unified TypeScript library for AI model interactions with standardized interfaces and function calling.
 
 ## Features
 
