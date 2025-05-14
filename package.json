@@ -42,9 +42,9 @@
     "@anthropic-ai/sdk": "^0.40.1",
     "@modelcontextprotocol/sdk": "^1.11.0",
     "diff": "^7.0.0",
-    "llm-info": "^1.0.41",
+    "llm-info": "^1.0.44",
     "openai": "^4.97.0",
-    "send-prompt": "^1.0.10"
+    "send-prompt": "^1.0.13"
   },
   "devDependencies": {
     "@types/diff": "^7.0.2",

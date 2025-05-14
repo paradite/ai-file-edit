@@ -1,14 +1,19 @@
 import {Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import fs from 'fs/promises';
-import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
+import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import {validatePath, applyFileEdits, applyReversePatch} from './utils/fileUtils.js';
 import {InputMessage, sendPrompt} from 'send-prompt';
 
+export type SUPPORTED_PROVIDERS =
+  | typeof AI_PROVIDERS.OPENAI
+  | typeof AI_PROVIDERS.ANTHROPIC
+  | typeof AI_PROVIDERS.GOOGLE;
+
 export const SUPPORTED_MODELS: {
   model: ModelEnum;
-  provider: AI_PROVIDER_TYPE;
+  provider: SUPPORTED_PROVIDERS;
   recommended: boolean;
   supportMultipleEditsPerMessage: boolean;
 }[] = [
@@ -80,7 +85,7 @@ export class FileEditTool {
   private fileContents: Record<string, string> = {};
   private tools: Tool[] = [];
   private modelName: ModelEnum;
-  private provider: AI_PROVIDER_TYPE;
+  private provider: SUPPORTED_PROVIDERS;
   private fileContext: string[] = [];
   private maxToolUseRounds: number;
   private parentDir: string;
@@ -89,7 +94,7 @@ export class FileEditTool {
     parentDir: string,
     allowedDirectories: string[] = [],
     modelName: ModelEnum,
-    provider: AI_PROVIDER_TYPE,
+    provider: SUPPORTED_PROVIDERS,
     apiKey: string,
     fileContext: string[] = [],
     maxToolUseRounds: number = 5,
