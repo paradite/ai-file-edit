@@ -104,19 +104,19 @@ const EditFileArgsSchema = z.object({
   edits: z.array(EditOperation).optional().describe('List of edits to apply (for partial edits)'),
 });
 
-type FirstPartyConfig = {
+export type FirstPartyConfig = {
   provider: SUPPORTED_FIRST_PARTYPROVIDERS;
   model: ModelEnum;
   apiKey: string;
 };
 
-type ThirdPartyConfig = {
+export type ThirdPartyConfig = {
   provider: SUPPORTED_THIRD_PARTY_PROVIDERS;
   customModel: string;
   apiKey: string;
 };
 
-type ModelProviderConfig = FirstPartyConfig | ThirdPartyConfig;
+export type ModelProviderConfig = FirstPartyConfig | ThirdPartyConfig;
 
 export class FileEditTool {
   private anthropic: {apiKey: string} | null = null;
