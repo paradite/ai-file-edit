@@ -52,9 +52,11 @@ describe('File Edit Tool with Google Gemini - Multiple Files', () => {
     fileEditTool = new FileEditTool(
       testDir,
       [path.join(testDir, '1')],
-      model,
-      AI_PROVIDERS.GOOGLE,
-      process.env.GEMINI_API_KEY || '',
+      {
+        provider: AI_PROVIDERS.GOOGLE,
+        model: model,
+        apiKey: process.env.GEMINI_API_KEY || '',
+      },
       [
         path.join(testDir, '1', 'file1.js'),
         path.join(testDir, '1', 'file2.js'),

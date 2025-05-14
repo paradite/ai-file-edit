@@ -98,9 +98,11 @@ import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 const claudeFileEditTool = new FileEditTool(
   '/path/to/parent/directory', // Parent directory for relative paths
   ['/path/to/allowed/directory'], // Allowed directories for file operations
-  ModelEnum['claude-3-7-sonnet-20250219'],
-  AI_PROVIDERS.ANTHROPIC,
-  process.env.ANTHROPIC_API_KEY,
+  {
+    provider: AI_PROVIDERS.ANTHROPIC,
+    model: ModelEnum['claude-3-7-sonnet-20250219'],
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  },
   ['/path/to/file1.js', '/path/to/file2.js'], // Optional: Files to include in context
   5, // Optional: Maximum number of tool use rounds (default: 5)
 );
@@ -109,9 +111,11 @@ const claudeFileEditTool = new FileEditTool(
 const gptFileEditTool = new FileEditTool(
   '/path/to/parent/directory', // Parent directory for relative paths
   ['/path/to/allowed/directory'], // Allowed directories for file operations
-  ModelEnum['gpt-4.1'],
-  AI_PROVIDERS.OPENAI,
-  process.env.OPENAI_API_KEY,
+  {
+    provider: AI_PROVIDERS.OPENAI,
+    model: ModelEnum['gpt-4.1'],
+    apiKey: process.env.OPENAI_API_KEY,
+  },
   ['/path/to/file1.js', '/path/to/file2.js'], // Optional: Files to include in context
   5, // Optional: Maximum number of tool use rounds (default: 5)
 );
@@ -120,9 +124,11 @@ const gptFileEditTool = new FileEditTool(
 const googleFileEditTool = new FileEditTool(
   '/path/to/parent/directory', // Parent directory for relative paths
   ['/path/to/allowed/directory'], // Allowed directories for file operations
-  ModelEnum['gemini-2.5-pro-preview-05-06'],
-  AI_PROVIDERS.GOOGLE,
-  process.env.GOOGLE_API_KEY,
+  {
+    provider: AI_PROVIDERS.GOOGLE,
+    model: ModelEnum['gemini-2.5-pro-preview-05-06'],
+    apiKey: process.env.GOOGLE_API_KEY,
+  },
   ['/path/to/file1.js', '/path/to/file2.js'], // Optional: Files to include in context
   5, // Optional: Maximum number of tool use rounds (default: 5)
 );
@@ -137,9 +143,11 @@ import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 const fileEditTool = new FileEditTool(
   '/path/to/parent/directory', // Parent directory for relative paths
   ['/path/to/allowed/directory'], // Allowed directories for file operations
-  ModelEnum['claude-3-7-sonnet-20250219'],
-  AI_PROVIDERS.ANTHROPIC,
-  'your-api-key',
+  {
+    provider: AI_PROVIDERS.ANTHROPIC,
+    model: ModelEnum['claude-3-7-sonnet-20250219'],
+    apiKey: 'your-api-key',
+  },
   ['/path/to/file/to/edit'], // Optional: Files to include in context
 );
 

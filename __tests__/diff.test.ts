@@ -29,9 +29,11 @@ describe('Diff Output Tests', () => {
     fileEditTool = new FileEditTool(
       testDir,
       [testDir],
-      model,
-      AI_PROVIDERS.ANTHROPIC,
-      process.env.ANTHROPIC_API_KEY || '',
+      {
+        provider: AI_PROVIDERS.ANTHROPIC,
+        model: model,
+        apiKey: process.env.ANTHROPIC_API_KEY || '',
+      },
       [testFilePath],
     );
 

@@ -51,9 +51,11 @@ describe('File Edit Tool with OpenAI - Multiple Files', () => {
     fileEditTool = new FileEditTool(
       testDir,
       [path.join(testDir, '1')],
-      model,
-      AI_PROVIDERS.OPENAI,
-      process.env.OPENAI_API_KEY || '',
+      {
+        provider: AI_PROVIDERS.OPENAI,
+        model: model,
+        apiKey: process.env.OPENAI_API_KEY || '',
+      },
       [
         path.join(testDir, '1', 'file1.js'),
         path.join(testDir, '1', 'file2.js'),

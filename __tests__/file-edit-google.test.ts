@@ -34,9 +34,11 @@ describe('File Edit Tool with Google Gemini', () => {
     fileEditTool = new FileEditTool(
       testDir,
       [path.join(testDir, '1')],
-      model,
-      AI_PROVIDERS.GOOGLE,
-      process.env.GEMINI_API_KEY || '',
+      {
+        provider: AI_PROVIDERS.GOOGLE,
+        model: model,
+        apiKey: process.env.GEMINI_API_KEY || '',
+      },
       [path.join(testDir, '1', 'edit-test-gemini.js')],
       3,
     );
@@ -68,9 +70,11 @@ describe('File Edit Tool with Google Gemini', () => {
     fileEditTool = new FileEditTool(
       testDir,
       [path.join(testDir, '1')],
-      model,
-      AI_PROVIDERS.GOOGLE,
-      process.env.GEMINI_API_KEY || '',
+      {
+        provider: AI_PROVIDERS.GOOGLE,
+        model: model,
+        apiKey: process.env.GEMINI_API_KEY || '',
+      },
       [path.join(testDir, '1', 'edit-test-gemini.js')],
       3,
     );

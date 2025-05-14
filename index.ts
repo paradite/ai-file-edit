@@ -1,15 +1,19 @@
 import {Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import fs from 'fs/promises';
-import {ModelEnum, AI_PROVIDERS} from 'llm-info';
+import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import {validatePath, applyFileEdits, applyReversePatch} from './utils/fileUtils.js';
 import {InputMessage, sendPrompt} from 'send-prompt';
 
-export type SUPPORTED_PROVIDERS =
+export type SUPPORTED_FIRST_PARTYPROVIDERS =
   | typeof AI_PROVIDERS.OPENAI
   | typeof AI_PROVIDERS.ANTHROPIC
   | typeof AI_PROVIDERS.GOOGLE;
+
+export type SUPPORTED_THIRD_PARTY_PROVIDERS = typeof AI_PROVIDERS.OPENROUTER;
+
+export type SUPPORTED_PROVIDERS = SUPPORTED_FIRST_PARTYPROVIDERS | SUPPORTED_THIRD_PARTY_PROVIDERS;
 
 export const SUPPORTED_MODELS: {
   model: ModelEnum;
@@ -77,15 +81,29 @@ const EditFileArgsSchema = z.object({
   edits: z.array(EditOperation).optional().describe('List of edits to apply (for partial edits)'),
 });
 
+type FirstPartyConfig = {
+  provider: SUPPORTED_FIRST_PARTYPROVIDERS;
+  model: ModelEnum;
+  apiKey: string;
+};
+
+type ThirdPartyConfig = {
+  provider: SUPPORTED_THIRD_PARTY_PROVIDERS;
+  customModel: string;
+  apiKey: string;
+};
+
+type ModelProviderConfig = FirstPartyConfig | ThirdPartyConfig;
+
 export class FileEditTool {
   private anthropic: {apiKey: string} | null = null;
   private openai: {apiKey: string} | null = null;
   private google: {apiKey: string} | null = null;
+  private openrouter: {apiKey: string} | null = null;
   private allowedDirectories: string[] = [];
   private fileContents: Record<string, string> = {};
   private tools: Tool[] = [];
-  private modelName: ModelEnum;
-  private provider: SUPPORTED_PROVIDERS;
+  private modelProviderConfig: ModelProviderConfig;
   private fileContext: string[] = [];
   private maxToolUseRounds: number;
   private parentDir: string;
@@ -93,25 +111,24 @@ export class FileEditTool {
   constructor(
     parentDir: string,
     allowedDirectories: string[] = [],
-    modelName: ModelEnum,
-    provider: SUPPORTED_PROVIDERS,
-    apiKey: string,
+    modelProviderConfig: ModelProviderConfig,
     fileContext: string[] = [],
     maxToolUseRounds: number = 5,
   ) {
     this.parentDir = parentDir;
     this.allowedDirectories = allowedDirectories;
-    this.modelName = modelName;
-    this.provider = provider;
+    this.modelProviderConfig = modelProviderConfig;
     this.fileContext = fileContext;
     this.maxToolUseRounds = maxToolUseRounds;
 
-    if (provider === AI_PROVIDERS.ANTHROPIC) {
-      this.anthropic = {apiKey};
-    } else if (provider === AI_PROVIDERS.OPENAI) {
-      this.openai = {apiKey};
-    } else if (provider === AI_PROVIDERS.GOOGLE) {
-      this.google = {apiKey};
+    if (this.modelProviderConfig.provider === AI_PROVIDERS.ANTHROPIC) {
+      this.anthropic = {apiKey: this.modelProviderConfig.apiKey};
+    } else if (this.modelProviderConfig.provider === AI_PROVIDERS.OPENAI) {
+      this.openai = {apiKey: this.modelProviderConfig.apiKey};
+    } else if (this.modelProviderConfig.provider === AI_PROVIDERS.GOOGLE) {
+      this.google = {apiKey: this.modelProviderConfig.apiKey};
+    } else if (this.modelProviderConfig.provider === AI_PROVIDERS.OPENROUTER) {
+      this.openrouter = {apiKey: this.modelProviderConfig.apiKey};
     }
 
     const editFileSchema = zodToJsonSchema(EditFileArgsSchema) as {
@@ -249,7 +266,7 @@ export class FileEditTool {
           .join('\n\n')
       : '';
 
-    if (this.provider === AI_PROVIDERS.GOOGLE) {
+    if (this.modelProviderConfig.provider === AI_PROVIDERS.GOOGLE) {
       // For Google, add both the function call and response messages
       const toolCallMessage = {
         role: 'google_function_call' as const,
@@ -351,51 +368,53 @@ export class FileEditTool {
       }
 
       const apiKey =
-        this.provider === AI_PROVIDERS.ANTHROPIC
+        this.modelProviderConfig.provider === AI_PROVIDERS.ANTHROPIC
           ? this.anthropic?.apiKey
-          : this.provider === AI_PROVIDERS.OPENAI
+          : this.modelProviderConfig.provider === AI_PROVIDERS.OPENAI
           ? this.openai?.apiKey
-          : this.google?.apiKey;
+          : this.modelProviderConfig.provider === AI_PROVIDERS.GOOGLE
+          ? this.google?.apiKey
+          : this.openrouter?.apiKey;
 
       if (!apiKey) {
         throw new Error('API key is not set');
       }
 
-      const response = await sendPrompt({
-        messages: globalMessageHistory,
-        systemPrompt,
-        model: this.modelName,
-        provider: this.provider,
-        apiKey,
-        tools: this.tools.map(tool => {
-          const schema = tool.input_schema as {
-            type: string;
-            properties: Record<string, any>;
-            required?: string[];
-          };
-          const parameters: any = {
-            type: 'object',
-            properties: schema.properties,
-            required: schema.required || [],
-          };
-          // Only include additionalProperties for non-Google providers
-          if (this.provider === AI_PROVIDERS.GOOGLE) {
-            delete parameters.additionalProperties;
-            // Also remove additionalProperties from nested items schema
-            if (parameters.properties.edits?.items) {
-              delete parameters.properties.edits.items.additionalProperties;
+      const response = await sendPrompt(
+        {
+          messages: globalMessageHistory,
+          systemPrompt,
+          tools: this.tools.map(tool => {
+            const schema = tool.input_schema as {
+              type: string;
+              properties: Record<string, any>;
+              required?: string[];
+            };
+            const parameters: any = {
+              type: 'object',
+              properties: schema.properties,
+              required: schema.required || [],
+            };
+            // Only include additionalProperties for non-Google providers
+            if (this.modelProviderConfig.provider === AI_PROVIDERS.GOOGLE) {
+              delete parameters.additionalProperties;
+              // Also remove additionalProperties from nested items schema
+              if (parameters.properties.edits?.items) {
+                delete parameters.properties.edits.items.additionalProperties;
+              }
             }
-          }
-          return {
-            type: 'function' as const,
-            function: {
-              name: tool.name,
-              description: tool.description || '',
-              parameters,
-            },
-          };
-        }),
-      });
+            return {
+              type: 'function' as const,
+              function: {
+                name: tool.name,
+                description: tool.description || '',
+                parameters,
+              },
+            };
+          }),
+        },
+        this.modelProviderConfig,
+      );
 
       if (response.message.content) {
         finalResponseMessages.push(response.message.content);

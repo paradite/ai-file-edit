@@ -42,9 +42,11 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
     fileEditTool = new FileEditTool(
       testDir,
       [path.join(testDir, '1')],
-      model,
-      AI_PROVIDERS.ANTHROPIC,
-      process.env.ANTHROPIC_API_KEY || '',
+      {
+        provider: AI_PROVIDERS.ANTHROPIC,
+        model: model,
+        apiKey: process.env.ANTHROPIC_API_KEY || '',
+      },
       [
         path.join(testDir, '1', 'file1.js'),
         path.join(testDir, '1', 'file2.js'),
