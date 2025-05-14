@@ -104,12 +104,16 @@ export type FirstPartyConfig = {
   provider: SUPPORTED_FIRST_PARTYPROVIDERS;
   model: ModelEnum;
   apiKey: string;
+} & {
+  headers?: Record<string, string>;
 };
 
 export type ThirdPartyConfig = {
   provider: SUPPORTED_THIRD_PARTY_PROVIDERS;
   customModel: string;
   apiKey: string;
+} & {
+  headers?: Record<string, string>;
 };
 
 export type ModelProviderConfig = FirstPartyConfig | ThirdPartyConfig;

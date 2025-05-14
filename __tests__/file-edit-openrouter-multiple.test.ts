@@ -51,6 +51,10 @@ describe('File Edit Tool with OpenRouter - Multiple Files', () => {
         provider: AI_PROVIDERS.OPENROUTER,
         customModel: 'openai/gpt-4.1',
         apiKey: process.env.OPENROUTER_API_KEY || '',
+        headers: {
+          'HTTP-Referer': 'https://eval.16x.engineer/',
+          'X-Title': '16x Eval',
+        },
       },
       [
         path.join(testDir, '1', 'file1.js'),

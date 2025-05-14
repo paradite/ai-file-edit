@@ -1,6 +1,6 @@
 {
   "name": "ai-file-edit",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -44,7 +44,7 @@
     "diff": "^7.0.0",
     "llm-info": "^1.0.44",
     "openai": "^4.97.0",
-    "send-prompt": "^2.0.0"
+    "send-prompt": "^2.0.1"
   },
   "devDependencies": {
     "@types/diff": "^7.0.2",
