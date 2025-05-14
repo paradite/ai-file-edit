@@ -13,12 +13,10 @@ export type SUPPORTED_FIRST_PARTYPROVIDERS =
 
 export type SUPPORTED_THIRD_PARTY_PROVIDERS = typeof AI_PROVIDERS.OPENROUTER;
 
-export const SUPPORTED_FIRST_PARTY_MODELS: {
-  model: ModelEnum;
-  provider: SUPPORTED_FIRST_PARTYPROVIDERS;
+export const SUPPORTED_FIRST_PARTY_MODELS: (Omit<FirstPartyConfig, 'apiKey'> & {
   recommended: boolean;
   supportMultipleEditsPerMessage: boolean;
-}[] = [
+})[] = [
   {
     model: ModelEnum['gpt-4.1'],
     provider: AI_PROVIDERS.OPENAI,
@@ -45,20 +43,18 @@ export const SUPPORTED_FIRST_PARTY_MODELS: {
   // },
 ] as const;
 
-export const SUPPORTED_THIRD_PARTY_MODELS: {
-  model: string;
-  provider: SUPPORTED_THIRD_PARTY_PROVIDERS;
+export const SUPPORTED_THIRD_PARTY_MODELS: (Omit<ThirdPartyConfig, 'apiKey'> & {
   recommended: boolean;
   supportMultipleEditsPerMessage: boolean;
-}[] = [
+})[] = [
   {
-    model: 'openai/gpt-4.1',
+    customModel: 'openai/gpt-4.1',
     provider: AI_PROVIDERS.OPENROUTER,
     recommended: true,
     supportMultipleEditsPerMessage: true,
   },
   {
-    model: 'google/gemini-2.5-pro-preview',
+    customModel: 'google/gemini-2.5-pro-preview',
     provider: AI_PROVIDERS.OPENROUTER,
     recommended: false,
     supportMultipleEditsPerMessage: true,
