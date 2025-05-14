@@ -13,11 +13,9 @@ export type SUPPORTED_FIRST_PARTYPROVIDERS =
 
 export type SUPPORTED_THIRD_PARTY_PROVIDERS = typeof AI_PROVIDERS.OPENROUTER;
 
-export type SUPPORTED_PROVIDERS = SUPPORTED_FIRST_PARTYPROVIDERS | SUPPORTED_THIRD_PARTY_PROVIDERS;
-
-export const SUPPORTED_MODELS: {
+export const SUPPORTED_FIRST_PARTY_MODELS: {
   model: ModelEnum;
-  provider: SUPPORTED_PROVIDERS;
+  provider: SUPPORTED_FIRST_PARTYPROVIDERS;
   recommended: boolean;
   supportMultipleEditsPerMessage: boolean;
 }[] = [
@@ -45,6 +43,31 @@ export const SUPPORTED_MODELS: {
     recommended: false,
     supportMultipleEditsPerMessage: true,
   },
+] as const;
+
+export const SUPPORTED_THIRD_PARTY_MODELS: {
+  model: string;
+  provider: SUPPORTED_THIRD_PARTY_PROVIDERS;
+  recommended: boolean;
+  supportMultipleEditsPerMessage: boolean;
+}[] = [
+  {
+    model: 'openai/gpt-4.1',
+    provider: AI_PROVIDERS.OPENROUTER,
+    recommended: true,
+    supportMultipleEditsPerMessage: true,
+  },
+  {
+    model: 'google/gemini-2.5-pro-preview',
+    provider: AI_PROVIDERS.OPENROUTER,
+    recommended: false,
+    supportMultipleEditsPerMessage: true,
+  },
+];
+
+export const SUPPORTED_MODELS = [
+  ...SUPPORTED_FIRST_PARTY_MODELS,
+  ...SUPPORTED_THIRD_PARTY_MODELS,
 ] as const;
 
 export type ToolCallStatus = 'success' | 'failure' | 'retry_limit_reached' | 'no_tool_calls';
