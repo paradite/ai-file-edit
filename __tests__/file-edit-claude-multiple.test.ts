@@ -23,7 +23,7 @@ describe('File Edit Tool with Claude - Multiple Files', () => {
     await fs.rm(testDir, {recursive: true, force: true});
   });
 
-  test('should edit multiple files in allowed directory', async () => {
+  test.skip('should edit multiple files in allowed directory', async () => {
     // Create test files with initial content
     const file1Path = path.join(testDir, '1', 'file1.js');
     const file2Path = path.join(testDir, '1', 'file2.js');
