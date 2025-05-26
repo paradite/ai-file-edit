@@ -25,7 +25,7 @@
     "test:openai-multiple": "npm run build && jest --verbose file-edit-openai-multiple.test.ts",
     "test:validate-path": "npm run build && jest --verbose validatePath.test.ts",
     "test:apply-file-edits": "npm run build && jest --verbose applyFileEdits.test.ts",
-    "test:ci": "npm run build && jest --ci --coverage --verbose validatePath.test.ts applyFileEdits.test.ts",
+    "test:ci": "npm run build && jest --ci --coverage --verbose applyFileEdits.test.ts diff.test.ts lineEndings.test.ts validatePath.test.ts",
     "build": "tsup index.ts --format esm,cjs --dts --clean",
     "prepublish": "npm run build",
     "prepare": "npm run build",
