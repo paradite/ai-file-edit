@@ -1,9 +1,9 @@
 import {Tool} from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import fs from 'fs/promises';
-import {ModelEnum, AI_PROVIDERS, AI_PROVIDER_TYPE} from 'llm-info';
+import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
-import {validatePath, applyFileEdits, applyReversePatch} from './utils/fileUtils.js';
+import {validatePath, applyFileEdits} from './utils/fileUtils.js';
 import {InputMessage, sendPrompt} from 'send-prompt';
 
 export type SUPPORTED_FIRST_PARTYPROVIDERS =
@@ -511,4 +511,10 @@ export class FileEditTool {
   }
 }
 
-export {applyReversePatch};
+export {
+  applyReversePatch,
+  getPlatformLineEnding,
+  detectLineEnding,
+  normalizeLineEndings,
+  applyPlatformLineEndings,
+} from './utils/fileUtils.js';

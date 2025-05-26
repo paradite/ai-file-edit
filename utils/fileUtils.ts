@@ -15,6 +15,36 @@ export function expandHome(filepath: string): string {
   return filepath;
 }
 
+// Line ending utilities
+export function getPlatformLineEnding(): string {
+  return os.platform() === 'win32' ? '\r\n' : '\n';
+}
+
+export function detectLineEnding(text: string): string {
+  // Check for Windows line endings first
+  if (text.includes('\r\n')) {
+    return '\r\n';
+  }
+  // Check for Unix line endings
+  if (text.includes('\n')) {
+    return '\n';
+  }
+  // Default to platform line ending if no line endings found
+  return getPlatformLineEnding();
+}
+
+export function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n/g, '\n');
+}
+
+export function applyPlatformLineEndings(text: string, targetLineEnding?: string): string {
+  // First normalize to Unix line endings
+  const normalized = normalizeLineEndings(text);
+  // Then apply the target line ending (default to platform line ending)
+  const lineEnding = targetLineEnding || getPlatformLineEnding();
+  return lineEnding === '\n' ? normalized : normalized.replace(/\n/g, lineEnding);
+}
+
 // Security utilities
 export async function validatePath(
   parentDir: string,
@@ -72,10 +102,6 @@ export async function validatePath(
 }
 
 // File editing and diffing utilities
-export function normalizeLineEndings(text: string): string {
-  return text.replace(/\r\n/g, '\n');
-}
-
 export function createUnifiedDiff(
   originalContent: string,
   newContent: string,
@@ -127,16 +153,21 @@ export async function applyFileEdits(
   let fileExists = false;
   let newFileCreated = false;
   let validEdits = false;
+  let originalLineEnding = getPlatformLineEnding(); // Default to platform line ending
 
   // Resolve the file path relative to parentDir if it's not absolute
   const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(parentDir, filePath);
 
   try {
-    originalContent = normalizeLineEndings(await fs.readFile(absolutePath, 'utf-8'));
+    const rawContent = await fs.readFile(absolutePath, 'utf-8');
+    originalLineEnding = detectLineEnding(rawContent); // Preserve original line ending
+    originalContent = normalizeLineEndings(rawContent);
     fileExists = true;
   } catch (error) {
     // File doesn't exist yet, treat as empty content
     originalContent = '';
+    // For new files, use platform line ending
+    originalLineEnding = getPlatformLineEnding();
   }
 
   let modifiedContent = originalContent;
@@ -225,7 +256,9 @@ export async function applyFileEdits(
     numBackticks,
   )}\n\n`;
 
-  await fs.writeFile(absolutePath, modifiedContent, 'utf-8');
+  // Apply appropriate line endings before writing to file
+  const contentToWrite = applyPlatformLineEndings(modifiedContent, originalLineEnding);
+  await fs.writeFile(absolutePath, contentToWrite, 'utf-8');
 
   let response = '';
 
