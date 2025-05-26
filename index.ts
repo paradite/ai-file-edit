@@ -329,7 +329,7 @@ export class FileEditTool {
         finalText.push(toolResultMessage.content);
       } else {
         const assistantMessage = {
-          role: 'assistant' as const,
+          role: 'user' as const,
           content:
             `[Tool call completed: ${result}]\n\n[Updated file content]\n\n${queryWithFileContents}\n\n${followupTemplateEdit}`.trimEnd(),
         };

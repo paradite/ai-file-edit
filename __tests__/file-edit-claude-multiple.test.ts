@@ -4,7 +4,7 @@ import path from 'path';
 import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 import {applyReversePatch} from '../utils/fileUtils';
 
-const model = ModelEnum['claude-3-7-sonnet-20250219'];
+const model = ModelEnum['claude-sonnet-4-20250514'];
 
 jest.retryTimes(1);
 
