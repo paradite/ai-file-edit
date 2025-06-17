@@ -28,8 +28,7 @@
     "test:ci": "npm run build && jest --ci --coverage --verbose applyFileEdits.test.ts lineEndings.test.ts validatePath.test.ts",
     "build": "tsup index.ts --format esm,cjs --dts --clean",
     "prepublish": "npm run build",
-    "prepare": "npm run build",
-    "prepublishOnly": "npm test"
+    "prepare": "npm run build"
   },
   "repository": {
     "type": "git",
