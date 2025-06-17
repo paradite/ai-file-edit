@@ -24,7 +24,7 @@ export const SUPPORTED_FIRST_PARTY_MODELS: (Omit<FirstPartyConfig, 'apiKey'> & {
     supportMultipleEditsPerMessage: true,
   },
   {
-    model: ModelEnum['gemini-2.5-pro-preview-05-06'],
+    model: ModelEnum['gemini-2.5-pro-preview-06-05'],
     provider: AI_PROVIDERS.GOOGLE,
     recommended: false,
     supportMultipleEditsPerMessage: true,
@@ -470,7 +470,7 @@ export class FileEditTool {
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments),
             globalMessageHistory,
-            toolCall.id,
+            toolCall.id || '',
           );
 
           finalResponseMessages.push(...toolFinalText);

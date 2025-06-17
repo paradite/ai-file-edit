@@ -4,7 +4,7 @@ import path from 'path';
 import {ModelEnum, AI_PROVIDERS} from 'llm-info';
 
 // const model = ModelEnum['gemini-2.5-pro-exp-03-25'];
-const model = ModelEnum['gemini-2.5-pro-preview-05-06'];
+const model = ModelEnum['gemini-2.5-pro-preview-06-05'];
 
 // jest.retryTimes(1);
 
