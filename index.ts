@@ -24,7 +24,7 @@ export const SUPPORTED_FIRST_PARTY_MODELS: (Omit<FirstPartyConfig, 'apiKey'> & {
     supportMultipleEditsPerMessage: true,
   },
   {
-    model: ModelEnum['gemini-2.5-pro-preview-06-05'],
+    model: ModelEnum['gemini-2.5-pro'],
     provider: AI_PROVIDERS.GOOGLE,
     recommended: false,
     supportMultipleEditsPerMessage: true,

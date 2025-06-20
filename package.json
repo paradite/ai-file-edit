@@ -1,6 +1,6 @@
 {
   "name": "ai-file-edit",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -41,7 +41,7 @@
     "@anthropic-ai/sdk": "^0.40.1",
     "@modelcontextprotocol/sdk": "^1.11.0",
     "diff": "^7.0.0",
-    "llm-info": "^1.0.52",
+    "llm-info": "^1.0.53",
     "openai": "^4.97.0",
     "send-prompt": "^2.4.0"
   },
